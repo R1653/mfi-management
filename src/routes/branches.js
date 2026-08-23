@@ -7,6 +7,7 @@ const { paginate } = require('../utils/pagination');
 const { requireAuth } = require('../middleware/auth');
 const { requirePermission } = require('../middleware/rbac');
 const dayjs = require('dayjs');
+const { computeBillableMonth } = require('../utils/billableMonth');
 
 /**
  * GET /api/branches
@@ -21,6 +22,9 @@ router.get('/', requireAuth, requirePermission('branch.view'), async (req, res) 
       mfi_id = '',
       branch_type = '',
       status = '',
+      team_id = '',
+      team_member_id = '',
+      pending_billable = '',
       sortBy = 'id',
       sortOrder = 'desc'
     } = req.query;
@@ -32,7 +36,8 @@ router.get('/', requireAuth, requirePermission('branch.view'), async (req, res) 
       .select(
         'branches.*',
         'mfi.short_name as mfi_short_name',
-        'mfi.full_name as mfi_full_name'
+        'mfi.full_name as mfi_full_name',
+        'mfi.om_grace_period_months as om_grace_period_months'
       );
 
     if (search.trim()) {
@@ -57,16 +62,42 @@ router.get('/', requireAuth, requirePermission('branch.view'), async (req, res) 
       query = query.andWhere('branches.status', status);
     }
 
+    // Filter by Team: show branches whose MFI is assigned to the selected team
+    if (team_id) {
+      query = query.andWhere('mfi.team_id', team_id);
+    }
+
+    // Filter by Team Member: show branches whose MFI is assigned to the selected member
+    if (team_member_id) {
+      query = query.andWhere('mfi.team_member_id', team_member_id);
+    }
+
     const validSortCols = ['id', 'branch_name', 'branch_code', 'branch_opening_date', 'software_start_date', 'billable_month', 'branch_type', 'status'];
     const col = validSortCols.includes(sortBy) ? `branches.${sortBy}` : 'branches.id';
     const order = sortOrder.toLowerCase() === 'asc' ? 'asc' : 'desc';
 
     query = query.orderBy(col, order);
 
-    const result = await paginate(query, { page, limit });
+    let result = await paginate(query, { page, limit });
+
+    const today = dayjs().startOf('day');
+
+    // Pending billable filter: Branch Office branches where first bill date (software_start_date + grace) > today
+    let filteredData = result.data;
+    if (pending_billable === '1') {
+      filteredData = result.data.filter(branch => {
+        // Only applies to Branch Office type
+        if (branch.branch_type !== 'Branch Office') return false;
+        const gracePeriod = branch.om_grace_period_months;
+        if (gracePeriod === null || gracePeriod === undefined) return false;
+        const firstBillDate = dayjs(branch.software_start_date).add(gracePeriod, 'month');
+
+        return firstBillDate.isAfter(today);
+      });
+    }
 
     // Format dates & add SL
-    const enrichedData = result.data.map((branch, index) => ({
+    const enrichedData = filteredData.map((branch, index) => ({
       ...branch,
       sl: (result.pagination.page - 1) * result.pagination.limit + index + 1,
       branch_opening_date_formatted: dayjs(branch.branch_opening_date).format('YYYY-MM-DD'),
@@ -277,9 +308,11 @@ router.post('/', requireAuth, requirePermission('branch.create'), async (req, re
       return res.status(400).json({ success: false, message: 'Software Start Date is required.' });
     }
 
-    if (!billable_month || !/^\d{4}-\d{2}$/.test(billable_month.trim())) {
-      return res.status(400).json({ success: false, message: 'Billable Month is required in YYYY-MM format.' });
-    }
+    // Use user-supplied billable_month if valid; otherwise auto-compute from software_start_date + MFI grace period
+    const billableMonthPattern = /^\d{4}-(0[1-9]|1[0-2])$/;
+    const finalBillableMonth = (billable_month && billableMonthPattern.test(billable_month))
+      ? billable_month
+      : computeBillableMonth(software_start_date, mfi.om_grace_period_months);
 
     const validTypes = ['Branch Office', 'Area Office', 'Zone Office'];
     if (!validTypes.includes(branch_type)) {
@@ -294,7 +327,7 @@ router.post('/', requireAuth, requirePermission('branch.create'), async (req, re
       branch_code: cleanCode,
       branch_opening_date: dayjs(branch_opening_date).format('YYYY-MM-DD'),
       software_start_date: dayjs(software_start_date).format('YYYY-MM-DD'),
-      billable_month: billable_month.trim(),
+      billable_month: finalBillableMonth,
       branch_type,
       status: status === 'inactive' ? 'inactive' : 'active',
       created_by: userId,
@@ -383,9 +416,21 @@ router.put('/:id', requireAuth, requirePermission('branch.update'), async (req, 
       updated_at: new Date()
     };
 
+    const billableMonthPattern = /^\d{4}-(0[1-9]|1[0-2])$/;
+
     if (branch_opening_date) updatePayload.branch_opening_date = dayjs(branch_opening_date).format('YYYY-MM-DD');
-    if (software_start_date) updatePayload.software_start_date = dayjs(software_start_date).format('YYYY-MM-DD');
-    if (billable_month) updatePayload.billable_month = billable_month.trim();
+    if (software_start_date) {
+      updatePayload.software_start_date = dayjs(software_start_date).format('YYYY-MM-DD');
+    }
+
+    // Resolve billable_month: prefer explicit user value; if software_start_date changed without one, recompute
+    if (billable_month && billableMonthPattern.test(billable_month)) {
+      updatePayload.billable_month = billable_month;
+    } else if (software_start_date) {
+      // software_start_date changed but no explicit billable_month — recompute
+      const mfi = await db('mfi').where('id', existing.mfi_id).first();
+      updatePayload.billable_month = computeBillableMonth(software_start_date, mfi?.om_grace_period_months);
+    }
     if (branch_type) updatePayload.branch_type = branch_type;
     if (status && ['active', 'inactive'].includes(status)) updatePayload.status = status;
 

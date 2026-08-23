@@ -8,6 +8,7 @@ const { paginate } = require('../utils/pagination');
 const { requireAuth } = require('../middleware/auth');
 const { requirePermission } = require('../middleware/rbac');
 const dayjs = require('dayjs');
+const { computeBillableMonth } = require('../utils/billableMonth');
 
 /**
  * GET /api/mfis/autocomplete
@@ -19,7 +20,7 @@ router.get('/autocomplete', requireAuth, async (req, res) => {
 
     let query = db('mfi')
       .whereNull('deleted_at')
-      .select('id', 'short_name', 'full_name', 'status')
+      .select('id', 'short_name', 'full_name', 'status', 'om_grace_period_months')
       .orderBy('short_name', 'asc')
       .limit(20);
 
@@ -110,6 +111,7 @@ router.get('/', requireAuth, requirePermission('mfi.view'), async (req, res) => 
       status = '',
       team_member_id = '',
       team_leader_id = '',
+      is_head_office_billable = '',
       sortBy = 'id',
       sortOrder = 'desc'
     } = req.query;
@@ -158,6 +160,12 @@ router.get('/', requireAuth, requirePermission('mfi.view'), async (req, res) => 
           this.where('mfi.team_member_id', team_leader_id);
         }
       });
+    }
+
+    if (is_head_office_billable === 'yes' || is_head_office_billable === '1') {
+      query = query.andWhere('mfi.is_head_office_billable', 1);
+    } else if (is_head_office_billable === 'no' || is_head_office_billable === '0') {
+      query = query.andWhere('mfi.is_head_office_billable', 0);
     }
 
     // Allowed sort columns
@@ -393,6 +401,7 @@ router.post('/', requireAuth, requirePermission('mfi.create'), async (req, res) 
       initial_om_fee = 0,
       initial_branch_count = 0,
       is_head_office_billable = false,
+      om_grace_period_months = null,
       team_id = null,
       team_member_id = null,
       status = 'active'
@@ -461,6 +470,13 @@ router.post('/', requireAuth, requirePermission('mfi.create'), async (req, res) 
 
     const userId = req.session.user.id;
 
+    // Parse grace period: must be an integer (positive or negative) or null
+    let omGracePeriodMonths = null;
+    if (om_grace_period_months !== null && om_grace_period_months !== '' && om_grace_period_months !== undefined) {
+      const parsed = parseInt(om_grace_period_months, 10);
+      if (!isNaN(parsed)) omGracePeriodMonths = parsed;
+    }
+
     // 1. Insert MFI
     const [mfiId] = await trx('mfi').insert({
       full_name: full_name.trim(),
@@ -471,6 +487,7 @@ router.post('/', requireAuth, requirePermission('mfi.create'), async (req, res) 
       initial_om_fee: omFeeNum,
       initial_branch_count: branchCountNum,
       is_head_office_billable: isHeadOfficeBillable ? 1 : 0,
+      om_grace_period_months: omGracePeriodMonths,
       team_id: team_id ? parseInt(team_id, 10) : null,
       team_member_id: team_member_id ? parseInt(team_member_id, 10) : null,
       status: status === 'inactive' ? 'inactive' : 'active',
@@ -494,13 +511,14 @@ router.post('/', requireAuth, requirePermission('mfi.create'), async (req, res) 
 
     // 3. If Head Office is billable, create Head Office branch record
     if (isHeadOfficeBillable) {
+      const hoBillableMonth = computeBillableMonth(initial_agreement_date, omGracePeriodMonths);
       await trx('branches').insert({
         mfi_id: mfiId,
         branch_name: `${cleanShortName} Head Office`,
         branch_code: 'HO-01',
         branch_opening_date: dayjs(establish_date).format('YYYY-MM-DD'),
         software_start_date: dayjs(initial_agreement_date).format('YYYY-MM-DD'),
-        billable_month: dayjs(initial_agreement_date).format('YYYY-MM'),
+        billable_month: hoBillableMonth,
         branch_type: 'Branch Office',
         status: 'active',
         created_by: userId,
@@ -538,7 +556,11 @@ router.post('/', requireAuth, requirePermission('mfi.create'), async (req, res) 
   } catch (error) {
     await trx.rollback();
     console.error('Error creating MFI:', error);
-    res.status(500).json({ success: false, message: 'Unable to save MFI. Please check the entered information.' });
+    // Detect SQLite UNIQUE constraint violation on short_name
+    if (error.code === 'SQLITE_CONSTRAINT' || (error.message && error.message.includes('UNIQUE'))) {
+      return res.status(400).json({ success: false, message: 'MFI Short Name already exists. Please use a unique Short Name.' });
+    }
+    res.status(500).json({ success: false, message: 'Unable to save MFI. An unexpected error occurred.' });
   }
 });
 
@@ -554,6 +576,7 @@ router.put('/:id', requireAuth, requirePermission('mfi.update'), async (req, res
       short_name,
       establish_date,
       is_head_office_billable,
+      om_grace_period_months,
       team_id,
       team_member_id,
       status
@@ -618,13 +641,18 @@ router.put('/:id', requireAuth, requirePermission('mfi.update'), async (req, res
           .whereNull('deleted_at')
           .first();
         if (!existingHO) {
+          const hoSoftwareStart = existing.initial_agreement_date;
+          const hoGrace = updatePayload.om_grace_period_months !== undefined
+            ? updatePayload.om_grace_period_months
+            : existing.om_grace_period_months;
+          const hoBillableMonth = computeBillableMonth(hoSoftwareStart, hoGrace);
           await db('branches').insert({
             mfi_id: id,
             branch_name: `${cleanShortName} Head Office`,
             branch_code: 'HO-01',
             branch_opening_date: dayjs(existing.establish_date).format('YYYY-MM-DD'),
             software_start_date: dayjs(existing.initial_agreement_date).format('YYYY-MM-DD'),
-            billable_month: dayjs(existing.initial_agreement_date).format('YYYY-MM'),
+            billable_month: hoBillableMonth,
             branch_type: 'Branch Office',
             status: 'active',
             created_by: userId,
@@ -648,6 +676,16 @@ router.put('/:id', requireAuth, requirePermission('mfi.update'), async (req, res
       updatePayload.status = status;
     }
 
+    // Grace period for O&M: allow 0, positive, or negative integers; null clears the field
+    if (om_grace_period_months !== undefined) {
+      if (om_grace_period_months === null || om_grace_period_months === '') {
+        updatePayload.om_grace_period_months = null;
+      } else {
+        const parsed = parseInt(om_grace_period_months, 10);
+        if (!isNaN(parsed)) updatePayload.om_grace_period_months = parsed;
+      }
+    }
+
     await db('mfi').where('id', id).update(updatePayload);
 
     await AuditService.log({
@@ -667,7 +705,10 @@ router.put('/:id', requireAuth, requirePermission('mfi.update'), async (req, res
     });
   } catch (error) {
     console.error('Error updating MFI:', error);
-    res.status(500).json({ success: false, message: 'Unable to update MFI.' });
+    if (error.code === 'SQLITE_CONSTRAINT' || (error.message && error.message.includes('UNIQUE'))) {
+      return res.status(400).json({ success: false, message: 'MFI Short Name already exists. Please use a unique Short Name.' });
+    }
+    res.status(500).json({ success: false, message: 'Unable to update MFI. An unexpected error occurred.' });
   }
 });
 
@@ -719,6 +760,7 @@ router.patch('/:id/status', requireAuth, requirePermission('mfi.status'), async 
 /**
  * DELETE /api/mfis/:id
  * Soft delete MFI record (Super Admin or mfi.delete permission)
+ * Blocked if the MFI still has any non-deleted branch records.
  */
 router.delete('/:id', requireAuth, requirePermission('mfi.delete'), async (req, res) => {
   try {
@@ -727,6 +769,23 @@ router.delete('/:id', requireAuth, requirePermission('mfi.delete'), async (req, 
     const mfi = await db('mfi').where('id', id).whereNull('deleted_at').first();
     if (!mfi) {
       return res.status(404).json({ success: false, message: 'MFI not found.' });
+    }
+
+    // Block deletion if the MFI still has active branches
+    const branchCountRow = await db('branches')
+      .where('mfi_id', id)
+      .whereNull('deleted_at')
+      .count('id as count')
+      .first();
+
+    const branchCount = parseInt(branchCountRow?.count || 0, 10);
+
+    if (branchCount > 0) {
+      return res.status(409).json({
+        success: false,
+        message: `This MFI has ${branchCount} branch office${branchCount > 1 ? 's' : ''}. Please delete all branches first before removing the MFI.`,
+        branchCount
+      });
     }
 
     await db('mfi').where('id', id).update({

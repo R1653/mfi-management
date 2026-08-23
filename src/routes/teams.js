@@ -8,6 +8,49 @@ const { requireAuth } = require('../middleware/auth');
 const dayjs = require('dayjs');
 
 /**
+ * GET /api/teams/assigned
+ * Teams that have at least one MFI assigned (for Branch List filter dropdown)
+ */
+router.get('/assigned', requireAuth, async (req, res) => {
+  try {
+    const teams = await db('teams')
+      .join('mfi', 'mfi.team_id', 'teams.id')
+      .whereNull('teams.deleted_at')
+      .whereNull('mfi.deleted_at')
+      .select('teams.id', 'teams.team_name', 'teams.team_code')
+      .groupBy('teams.id', 'teams.team_name', 'teams.team_code')
+      .orderBy('teams.team_name', 'asc');
+
+    res.json({ success: true, data: teams });
+  } catch (error) {
+    console.error('Error fetching assigned teams:', error);
+    res.status(500).json({ success: false, message: 'Failed to retrieve assigned teams.' });
+  }
+});
+
+/**
+ * GET /api/teams/members/assigned
+ * Team members who have at least one MFI assigned to them (for Branch List filter dropdown).
+ * When selected, all branches of every MFI assigned to that member are returned by the branch filter.
+ */
+router.get('/members/assigned', requireAuth, async (req, res) => {
+  try {
+    const members = await db('team_members')
+      .join('mfi', 'mfi.team_member_id', 'team_members.id')
+      .whereNull('team_members.deleted_at')
+      .whereNull('mfi.deleted_at')
+      .select('team_members.id', 'team_members.member_name', 'team_members.member_code')
+      .groupBy('team_members.id', 'team_members.member_name', 'team_members.member_code')
+      .orderBy('team_members.member_name', 'asc');
+
+    res.json({ success: true, data: members });
+  } catch (error) {
+    console.error('Error fetching assigned team members:', error);
+    res.status(500).json({ success: false, message: 'Failed to retrieve assigned team members.' });
+  }
+});
+
+/**
  * GET /api/teams/all
  * Lightweight list of active teams for dropdown selectors
  */

@@ -1458,7 +1458,7 @@ const TeamMemberListView = {
 // 4. MFI MODULE VIEWS (List, Form, Profile View)
 // ==========================================
 const MfiListView = {
-  state: { page: 1, limit: 10, search: '', status: '', team_member_id: '', team_leader_id: '' },
+  state: { page: 1, limit: 10, search: '', status: '', team_member_id: '', team_leader_id: '', is_head_office_billable: '' },
 
   async render(container) {
     let filterOptions = { assignedMembers: [], assignedLeaders: [] };
@@ -1513,6 +1513,12 @@ const MfiListView = {
             `).join('')}
           </select>
 
+          <select id="mfi-hob-filter" class="form-select" style="width: 160px;">
+            <option value="">Head Office Billable</option>
+            <option value="yes" ${MfiListView.state.is_head_office_billable === 'yes' ? 'selected' : ''}>YES</option>
+            <option value="no" ${MfiListView.state.is_head_office_billable === 'no' ? 'selected' : ''}>NO</option>
+          </select>
+
           <button class="btn btn-secondary" onclick="MfiListView.applyFilters()">Filter</button>
           <button class="btn btn-ghost" onclick="MfiListView.resetFilters()">Reset</button>
         </div>
@@ -1553,8 +1559,8 @@ const MfiListView = {
   },
 
   async fetchData() {
-    const { page, limit, search, status, team_member_id, team_leader_id } = MfiListView.state;
-    const url = `/api/mfis?page=${page}&limit=${limit}&search=${encodeURIComponent(search)}&status=${encodeURIComponent(status)}&team_member_id=${encodeURIComponent(team_member_id || '')}&team_leader_id=${encodeURIComponent(team_leader_id || '')}`;
+    const { page, limit, search, status, team_member_id, team_leader_id, is_head_office_billable } = MfiListView.state;
+    const url = `/api/mfis?page=${page}&limit=${limit}&search=${encodeURIComponent(search)}&status=${encodeURIComponent(status)}&team_member_id=${encodeURIComponent(team_member_id || '')}&team_leader_id=${encodeURIComponent(team_leader_id || '')}&is_head_office_billable=${encodeURIComponent(is_head_office_billable || '')}`;
     const res = await fetch(url);
     const result = await res.json();
 
@@ -1624,6 +1630,7 @@ const MfiListView = {
     MfiListView.state.status = document.getElementById('mfi-status-filter').value;
     MfiListView.state.team_member_id = document.getElementById('mfi-team-member-filter')?.value || '';
     MfiListView.state.team_leader_id = document.getElementById('mfi-team-leader-filter')?.value || '';
+    MfiListView.state.is_head_office_billable = document.getElementById('mfi-hob-filter')?.value || '';
     MfiListView.state.page = 1;
     MfiListView.fetchData();
   },
@@ -1633,10 +1640,12 @@ const MfiListView = {
     document.getElementById('mfi-status-filter').value = '';
     if (document.getElementById('mfi-team-member-filter')) document.getElementById('mfi-team-member-filter').value = '';
     if (document.getElementById('mfi-team-leader-filter')) document.getElementById('mfi-team-leader-filter').value = '';
+    if (document.getElementById('mfi-hob-filter')) document.getElementById('mfi-hob-filter').value = '';
     MfiListView.state.search = '';
     MfiListView.state.status = '';
     MfiListView.state.team_member_id = '';
     MfiListView.state.team_leader_id = '';
+    MfiListView.state.is_head_office_billable = '';
     MfiListView.state.page = 1;
     MfiListView.fetchData();
   },
@@ -1671,11 +1680,31 @@ const MfiListView = {
   deleteMfi(id, nameEscaped) {
     const name = unescape(nameEscaped);
     UI.confirm(
-      `Are you sure you want to delete MFI <strong>${name}</strong>?<br><span style="color:var(--danger); font-size:12px;">This action will remove the MFI record and its associations from active listing.</span>`,
+      `Are you sure you want to delete MFI <strong>${name}</strong>?<br>
+       <span style="color:var(--danger); font-size:12px;">
+         ⚠️ Deletion is only allowed if the MFI has <strong>no existing branches</strong>.<br>
+         All branch records must be deleted first.
+       </span>`,
       async () => {
         try {
           const res = await fetch(`/api/mfis/${id}`, { method: 'DELETE' });
           const data = await res.json();
+
+          if (res.status === 409) {
+            // Branch block — show actionable error with link to branch list
+            UI.toast('danger', 'Cannot Delete MFI', data.message);
+            // Show a follow-up modal guiding the user
+            setTimeout(() => {
+              UI.confirm(
+                `<strong>${name}</strong> still has branch offices linked to it.<br><br>
+                 Please go to the <strong>Branch List</strong> and delete all branches for this MFI first, then try again.`,
+                () => { Router.navigate(`/branches?mfi_id=${id}`); },
+                { title: 'Branches Must Be Deleted First', confirmText: 'Go to Branch List', isDanger: false }
+              );
+            }, 300);
+            return;
+          }
+
           if (!res.ok) throw new Error(data.message);
           UI.toast('success', 'MFI Deleted', data.message);
           MfiListView.fetchData();
@@ -1751,14 +1780,15 @@ const MfiFormView = {
               <div class="form-grid-2">
                 <div class="form-group">
                   <label class="form-label" for="full_name">MFI Full Name <span class="required-star">*</span></label>
-                  <input type="text" id="full_name" class="form-control" required placeholder="e.g. Social Services Society" value="${mfi.full_name}">
+                  <input type="text" id="full_name" class="form-control" required placeholder="MFI Name" value="${mfi.full_name}">
+                  <div class="form-hint">Enter the complete registered legal name of the MFI.</div>
                   <div class="invalid-feedback" id="err-full_name"></div>
                 </div>
 
                 <div class="form-group">
                   <label class="form-label" for="short_name">MFI Short Name <span class="required-star">*</span></label>
-                  <input type="text" id="short_name" class="form-control" required placeholder="e.g. SSS" value="${mfi.short_name}">
-                  <div class="form-hint">Must be globally unique (used for autocomplete searches).</div>
+                  <input type="text" id="short_name" class="form-control" required placeholder="MFI short name" value="${mfi.short_name}">
+                  <div class="form-hint">Enter a unique abbreviation (e.g. SSS). Used for autocomplete &amp; quick searches.</div>
                   <div class="invalid-feedback" id="err-short_name"></div>
                 </div>
               </div>
@@ -1838,6 +1868,18 @@ const MfiFormView = {
                 </div>
               </div>
 
+              <!-- Form Grid 5: Grace Period for O&M -->
+              <div class="form-grid-2">
+                <div class="form-group">
+                  <label class="form-label" for="om_grace_period_months">Grace Period for O &amp; M</label>
+                  <input type="number" id="om_grace_period_months" class="form-control"
+                    placeholder="e.g. 3 or -2"
+                    value="${mfi.om_grace_period_months !== null && mfi.om_grace_period_months !== undefined ? mfi.om_grace_period_months : ''}">
+                  <div class="form-hint">Enter a whole number. Positive = future months (e.g. 3 = +3 months). Leave blank for none.</div>
+                  <div class="invalid-feedback" id="err-om_grace_period_months"></div>
+                </div>
+              </div>
+
               <div class="form-row-actions">
                 <button type="submit" id="save-mfi-btn" class="btn btn-primary btn-lg">
                   <span>${isEdit ? 'Save Changes' : 'Create MFI'}</span>
@@ -1908,6 +1950,8 @@ const MfiFormView = {
       const team_member_id = document.getElementById('mfi_team_member_id').value || null;
       const status = document.getElementById('mfi_status').value;
       const is_head_office_billable = document.getElementById('is_head_office_billable').value === 'yes';
+      const omGracePeriodRaw = document.getElementById('om_grace_period_months').value.trim();
+      const om_grace_period_months = omGracePeriodRaw !== '' ? parseInt(omGracePeriodRaw, 10) : null;
 
       // Validation
       let hasError = false;
@@ -1933,7 +1977,29 @@ const MfiFormView = {
         hasError = true;
       }
 
+      // Validate create-only fields
+      if (!isEdit) {
+        if (!initial_agreement_date) {
+          document.getElementById('err-initial_agreement_date').textContent = 'Initial Agreement Date is required.';
+          document.getElementById('initial_agreement_date').classList.add('is-invalid');
+          hasError = true;
+        }
+        const licFee = parseFloat(initial_license_fee);
+        if (initial_license_fee === '' || isNaN(licFee) || licFee < 0) {
+          document.getElementById('err-initial_license_fee').textContent = 'License Fee must be a valid non-negative number.';
+          document.getElementById('initial_license_fee').classList.add('is-invalid');
+          hasError = true;
+        }
+        const omFee = parseFloat(initial_om_fee);
+        if (initial_om_fee === '' || isNaN(omFee) || omFee < 0) {
+          document.getElementById('err-initial_om_fee').textContent = 'O&M Fee must be a valid non-negative number.';
+          document.getElementById('initial_om_fee').classList.add('is-invalid');
+          hasError = true;
+        }
+      }
+
       if (hasError) return;
+
 
       const payload = {
         full_name,
@@ -1946,6 +2012,7 @@ const MfiFormView = {
         team_id: team_id ? parseInt(team_id, 10) : null,
         team_member_id: team_member_id ? parseInt(team_member_id, 10) : null,
         is_head_office_billable,
+        om_grace_period_months,
         status
       };
 
@@ -1968,7 +2035,26 @@ const MfiFormView = {
         UI.toast('success', 'MFI Saved', data.message);
         Router.navigate('/mfi');
       } catch (err) {
-        UI.toast('danger', 'Error Saving MFI', err.message);
+        // Try to map server error to the correct field
+        const msg = err.message || '';
+        let mapped = false;
+        const fieldMap = [
+          { pattern: /full.?name/i,          field: 'full_name' },
+          { pattern: /short.?name/i,         field: 'short_name' },
+          { pattern: /establish.?date/i,     field: 'establish_date' },
+          { pattern: /agreement.?date/i,     field: 'initial_agreement_date' },
+          { pattern: /license.?fee/i,        field: 'initial_license_fee' },
+          { pattern: /o.*m.?fee|om.?fee/i,   field: 'initial_om_fee' },
+          { pattern: /grace.?period/i,       field: 'om_grace_period_months' },
+        ];
+        fieldMap.forEach(({ pattern, field }) => {
+          if (pattern.test(msg)) {
+            const el = document.getElementById(field);
+            const errEl = document.getElementById(`err-${field}`);
+            if (el && errEl) { el.classList.add('is-invalid'); errEl.textContent = msg; mapped = true; }
+          }
+        });
+        if (!mapped) UI.toast('danger', 'Error Saving MFI', msg);
         saveBtn.disabled = false;
       }
     });
@@ -2041,6 +2127,14 @@ const MfiProfileView = {
                 <div style="color: var(--text-muted);">Is Head Office Billable:</div>
                 <div style="font-weight: 600; margin-top: 2px;">
                   <span class="badge ${mfi.is_head_office_billable ? 'badge-active' : 'badge-neutral'}">${mfi.is_head_office_billable ? 'YES' : 'NO'}</span>
+                </div>
+              </div>
+              <div>
+                <div style="color: var(--text-muted);">Grace Period for O &amp; M:</div>
+                <div style="font-weight: 600; margin-top: 2px;">
+                  ${(mfi.om_grace_period_months !== null && mfi.om_grace_period_months !== undefined)
+                    ? `<span class="badge badge-neutral">${mfi.om_grace_period_months > 0 ? '+' : ''}${mfi.om_grace_period_months} Month${Math.abs(mfi.om_grace_period_months) !== 1 ? 's' : ''}</span>`
+                    : '<span style="color: var(--text-muted);">Not Set</span>'}
                 </div>
               </div>
               <div>
@@ -2380,7 +2474,7 @@ const MfiProfileView = {
 // 5. BRANCH MODULE VIEWS (List, Form)
 // ==========================================
 const BranchListView = {
-  state: { page: 1, limit: 10, search: '', mfi_id: '', branch_type: '', status: '' },
+  state: { page: 1, limit: 10, search: '', mfi_id: '', branch_type: '', status: '', team_id: '', team_member_id: '', pending_billable: '' },
 
   async render(container) {
     // Fetch MFIs for dropdown filter
@@ -2388,17 +2482,35 @@ const BranchListView = {
     const mfiData = await mfiRes.json();
     AppState.cachedMfis = mfiData.data || [];
 
+    // Fetch assigned teams (only teams with at least one MFI)
+    let assignedTeams = [];
+    try {
+      const teamRes = await fetch('/api/teams/assigned');
+      const teamData = await teamRes.json();
+      assignedTeams = teamData.data || [];
+    } catch (e) { console.warn('Could not load assigned teams', e); }
+
+    // Fetch assigned team members (only members linked to MFIs with branches)
+    let assignedMembers = [];
+    try {
+      const memberRes = await fetch('/api/teams/members/assigned');
+      const memberData = await memberRes.json();
+      assignedMembers = memberData.data || [];
+    } catch (e) { console.warn('Could not load assigned members', e); }
+
     // Parse query params if navigated with ?mfi_id=...
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('mfi_id')) BranchListView.state.mfi_id = urlParams.get('mfi_id');
     if (urlParams.get('branch_type')) BranchListView.state.branch_type = urlParams.get('branch_type');
     if (urlParams.get('status')) BranchListView.state.status = urlParams.get('status');
+    if (urlParams.get('team_id')) BranchListView.state.team_id = urlParams.get('team_id');
+    if (urlParams.get('team_member_id')) BranchListView.state.team_member_id = urlParams.get('team_member_id');
+    if (urlParams.get('pending_billable')) BranchListView.state.pending_billable = urlParams.get('pending_billable');
 
     container.innerHTML = `
       <div class="page-header">
         <div>
           <h1 class="page-title">Branch Offices Management</h1>
-          <p class="page-subtitle">Master register of institutional branch, area, and zone offices</p>
         </div>
         <div class="page-actions">
           <div class="btn-group">
@@ -2415,6 +2527,7 @@ const BranchListView = {
 
       <!-- Filters -->
       <div class="filter-bar">
+        <!-- Row 1: primary filters -->
         <div class="filter-group">
           <div class="search-input-wrapper">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -2441,8 +2554,45 @@ const BranchListView = {
             <option value="inactive" ${BranchListView.state.status === 'inactive' ? 'selected' : ''}>Inactive</option>
           </select>
 
+          <!-- Advanced Filters toggle button -->
+          <button id="branch-adv-toggle-btn" onclick="BranchListView.toggleAdvanced()" style="display:inline-flex; align-items:center; gap:6px; padding:7px 13px; border-radius:6px; border:1.5px solid ${(BranchListView.state.team_id || BranchListView.state.team_member_id || BranchListView.state.pending_billable === '1') ? 'var(--primary,#1a56db)' : 'var(--border-color,#e2e8f0)'}; background:${(BranchListView.state.team_id || BranchListView.state.team_member_id || BranchListView.state.pending_billable === '1') ? 'rgba(26,86,219,0.07)' : '#fff'}; font-size:13px; font-weight:500; color:${(BranchListView.state.team_id || BranchListView.state.team_member_id || BranchListView.state.pending_billable === '1') ? 'var(--primary,#1a56db)' : 'var(--text-muted,#64748b)'}; cursor:pointer; transition:all 0.2s;" title="Toggle advanced filters">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/></svg>
+            Advanced Filters
+            ${(BranchListView.state.team_id || BranchListView.state.team_member_id || BranchListView.state.pending_billable === '1')
+              ? `<span style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:var(--primary,#1a56db);color:#fff;font-size:10px;font-weight:700;">${[BranchListView.state.team_id, BranchListView.state.team_member_id, BranchListView.state.pending_billable === '1' ? '1' : ''].filter(Boolean).length}</span>`
+              : ''}
+          </button>
+
           <button class="btn btn-secondary" onclick="BranchListView.applyFilters()">Filter</button>
           <button class="btn btn-ghost" onclick="BranchListView.resetFilters()">Reset</button>
+        </div>
+
+        <!-- Row 2: Advanced filters — hidden by default, revealed by toggle -->
+        <div id="branch-advanced-panel" style="display:${(BranchListView.state.team_id || BranchListView.state.team_member_id || BranchListView.state.pending_billable === '1') ? 'flex' : 'none'}; flex-wrap:wrap; align-items:center; gap:10px; margin-top:10px; padding:12px 14px; background:#f8fafc; border:1px solid var(--border-color,#e2e8f0); border-radius:8px; animation: fadeIn 0.18s ease;">
+          <span style="font-size:12px; font-weight:600; color:var(--text-muted,#64748b); text-transform:uppercase; letter-spacing:0.5px; margin-right:4px;">Advanced:</span>
+
+          <select id="branch-team-filter" class="form-select" style="width: 200px;">
+            <option value="">All Teams</option>
+            ${assignedTeams.length === 0
+              ? '<option disabled>— No teams assigned to any MFI —</option>'
+              : assignedTeams.map(t => `<option value="${t.id}" ${BranchListView.state.team_id == t.id ? 'selected' : ''}>${t.team_name} (${t.team_code})</option>`).join('')
+            }
+          </select>
+
+          <select id="branch-member-filter" class="form-select" style="width: 220px;">
+            <option value="">All Team Members</option>
+            ${assignedMembers.length === 0
+              ? '<option disabled>— No members linked to branches —</option>'
+              : assignedMembers.map(m => `<option value="${m.id}" ${BranchListView.state.team_member_id == m.id ? 'selected' : ''}>${m.member_name} (${m.member_code})</option>`).join('')
+            }
+          </select>
+
+          <label id="branch-pending-billable-toggle" style="display:inline-flex; align-items:center; gap:7px; cursor:pointer; padding:7px 14px; border-radius:6px; border:1.5px solid ${BranchListView.state.pending_billable === '1' ? 'var(--warning,#d97706)' : 'var(--border-color,#e2e8f0)'}; background:${BranchListView.state.pending_billable === '1' ? 'rgba(217,119,6,0.08)' : '#fff'}; font-size:13px; font-weight:500; color:${BranchListView.state.pending_billable === '1' ? 'var(--warning,#d97706)' : 'var(--text-secondary,#475569)'}; user-select:none; transition:all 0.2s;" title="Shows only Branch Office type branches whose first bill date (Software Start + Grace Period) has not yet arrived">
+            <input type="checkbox" id="branch-pending-billable" style="display:none;" ${BranchListView.state.pending_billable === '1' ? 'checked' : ''}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 14 14"/></svg>
+            Pending Billable Branch
+            <span style="font-size:10px; opacity:0.7; font-weight:400;">(Branch Office only)</span>
+          </label>
         </div>
       </div>
 
@@ -2476,12 +2626,42 @@ const BranchListView = {
       if (e.key === 'Enter') BranchListView.applyFilters();
     });
 
+    // Pending billable toggle visual feedback
+    const pendingCheckbox = document.getElementById('branch-pending-billable');
+    const pendingLabel = document.getElementById('branch-pending-billable-toggle');
+    if (pendingCheckbox && pendingLabel) {
+      pendingCheckbox.addEventListener('change', () => {
+        const checked = pendingCheckbox.checked;
+        pendingLabel.style.borderColor = checked ? 'var(--warning,#d97706)' : 'var(--border-color,#e2e8f0)';
+        pendingLabel.style.background = checked ? 'rgba(217,119,6,0.08)' : '#fff';
+        pendingLabel.style.color = checked ? 'var(--warning,#d97706)' : 'var(--text-secondary,#475569)';
+      });
+      pendingLabel.addEventListener('click', () => {
+        pendingCheckbox.checked = !pendingCheckbox.checked;
+        pendingCheckbox.dispatchEvent(new Event('change'));
+      });
+    }
+
     await BranchListView.fetchData();
   },
 
+  toggleAdvanced() {
+    const panel = document.getElementById('branch-advanced-panel');
+    if (!panel) return;
+    const isVisible = panel.style.display !== 'none';
+    panel.style.display = isVisible ? 'none' : 'flex';
+    const btn = document.getElementById('branch-adv-toggle-btn');
+    if (btn) {
+      const hasActive = BranchListView.state.team_id || BranchListView.state.team_member_id || BranchListView.state.pending_billable === '1';
+      btn.style.borderColor = (hasActive || !isVisible) ? 'var(--primary,#1a56db)' : 'var(--border-color,#e2e8f0)';
+      btn.style.background = (hasActive || !isVisible) ? 'rgba(26,86,219,0.07)' : '#fff';
+      btn.style.color = (hasActive || !isVisible) ? 'var(--primary,#1a56db)' : 'var(--text-muted,#64748b)';
+    }
+  },
+
   async fetchData() {
-    const { page, limit, search, mfi_id, branch_type, status } = BranchListView.state;
-    const url = `/api/branches?page=${page}&limit=${limit}&search=${encodeURIComponent(search)}&mfi_id=${encodeURIComponent(mfi_id)}&branch_type=${encodeURIComponent(branch_type)}&status=${encodeURIComponent(status)}`;
+    const { page, limit, search, mfi_id, branch_type, status, team_id, team_member_id, pending_billable } = BranchListView.state;
+    const url = `/api/branches?page=${page}&limit=${limit}&search=${encodeURIComponent(search)}&mfi_id=${encodeURIComponent(mfi_id)}&branch_type=${encodeURIComponent(branch_type)}&status=${encodeURIComponent(status)}&team_id=${encodeURIComponent(team_id)}&team_member_id=${encodeURIComponent(team_member_id)}&pending_billable=${encodeURIComponent(pending_billable)}`;
     const res = await fetch(url);
     const result = await res.json();
 
@@ -2550,6 +2730,9 @@ const BranchListView = {
     BranchListView.state.mfi_id = document.getElementById('branch-mfi-filter').value;
     BranchListView.state.branch_type = document.getElementById('branch-type-filter').value;
     BranchListView.state.status = document.getElementById('branch-status-filter').value;
+    BranchListView.state.team_id = document.getElementById('branch-team-filter').value;
+    BranchListView.state.team_member_id = document.getElementById('branch-member-filter').value;
+    BranchListView.state.pending_billable = document.getElementById('branch-pending-billable').checked ? '1' : '';
     BranchListView.state.page = 1;
     BranchListView.fetchData();
   },
@@ -2559,7 +2742,13 @@ const BranchListView = {
     document.getElementById('branch-mfi-filter').value = '';
     document.getElementById('branch-type-filter').value = '';
     document.getElementById('branch-status-filter').value = '';
-    BranchListView.state = { page: 1, limit: 10, search: '', mfi_id: '', branch_type: '', status: '' };
+    const teamFilter = document.getElementById('branch-team-filter');
+    if (teamFilter) teamFilter.value = '';
+    const memberFilter = document.getElementById('branch-member-filter');
+    if (memberFilter) memberFilter.value = '';
+    const pendingCb = document.getElementById('branch-pending-billable');
+    if (pendingCb) { pendingCb.checked = false; pendingCb.dispatchEvent(new Event('change')); }
+    BranchListView.state = { page: 1, limit: 10, search: '', mfi_id: '', branch_type: '', status: '', team_id: '', team_member_id: '', pending_billable: '' };
     BranchListView.fetchData();
   },
 
@@ -2609,8 +2798,8 @@ const BranchListView = {
   },
 
   export(format) {
-    const { search, mfi_id, branch_type, status } = BranchListView.state;
-    window.open(`/api/branches/export?format=${format}&search=${encodeURIComponent(search)}&mfi_id=${encodeURIComponent(mfi_id)}&branch_type=${encodeURIComponent(branch_type)}&status=${encodeURIComponent(status)}`, '_blank');
+    const { search, mfi_id, branch_type, status, team_id, team_member_id, pending_billable } = BranchListView.state;
+    window.open(`/api/branches/export?format=${format}&search=${encodeURIComponent(search)}&mfi_id=${encodeURIComponent(mfi_id)}&branch_type=${encodeURIComponent(branch_type)}&status=${encodeURIComponent(status)}&team_id=${encodeURIComponent(team_id)}&team_member_id=${encodeURIComponent(team_member_id)}&pending_billable=${encodeURIComponent(pending_billable)}`, '_blank');
   }
 };
 
@@ -2708,7 +2897,18 @@ const BranchFormView = {
 
                 <div class="form-group">
                   <label class="form-label" for="billable_month">Billable Month <span class="required-star">*</span></label>
-                  <input type="month" id="billable_month" class="form-control" required value="${branch.billable_month || ''}">
+                  <div style="display:flex; gap:8px; align-items:center;">
+                    <input type="month" id="billable_month" class="form-control"
+                      value="${branch.billable_month || ''}"
+                      style="font-weight: 700; color: var(--primary); flex:1;">
+                    <button type="button" id="btn-recalc-billable" onclick="BranchFormView.recomputeBillableMonth(true)"
+                      style="white-space:nowrap; padding:8px 14px; border-radius:6px; border:1.5px solid var(--border-color,#e2e8f0); background:#fff; font-size:12px; font-weight:600; color:var(--text-secondary,#475569); cursor:pointer; display:inline-flex; align-items:center; gap:5px; transition:all 0.2s;"
+                      title="Recalculate from Software Start Date &amp; MFI Grace Period">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                      Recalculate
+                    </button>
+                  </div>
+                  <div class="form-hint">Auto-calculated from Software Start Date + Grace Period (Day ≤ 15 = same month; Day &gt; 15 = next month). You may override manually.</div>
                   <div class="invalid-feedback" id="err-billable_month"></div>
                 </div>
               </div>
@@ -2746,6 +2946,30 @@ const BranchFormView = {
 
     // Setup autocomplete logic
     BranchFormView.initMfiAutocomplete(mfis);
+
+    // Track if user manually edits the billable month
+    document.getElementById('billable_month').addEventListener('input', (e) => {
+      e.target.dataset.manual = 'true';
+    });
+
+    // Auto-compute billable month when software_start_date changes
+    document.getElementById('software_start_date').addEventListener('change', () => {
+      BranchFormView.recomputeBillableMonth(false);
+    });
+
+    // If editing — populate grace period on the hidden field from loaded branch
+    if (isEdit && branch.mfi_id) {
+      // Fetch grace period for the already-selected MFI
+      fetch(`/api/mfis/${branch.mfi_id}`)
+        .then(r => r.json())
+        .then(d => {
+          if (d.success) {
+            document.getElementById('mfi_id').dataset.grace = d.data.mfi.om_grace_period_months ?? 0;
+            BranchFormView.recomputeBillableMonth(true);
+          }
+        })
+        .catch(() => {});
+    }
 
     // Form submit listener
     document.getElementById('branch-form').addEventListener('submit', async (e) => {
@@ -2827,7 +3051,25 @@ const BranchFormView = {
         UI.toast('success', 'Branch Saved', data.message);
         Router.navigate('/branches');
       } catch (err) {
-        UI.toast('danger', 'Error Saving Branch', err.message);
+        const msg = err.message || '';
+        let mapped = false;
+        const fieldMap = [
+          { pattern: /branch.?name/i,         field: 'branch_name' },
+          { pattern: /branch.?code/i,          field: 'branch_code' },
+          { pattern: /opening.?date/i,         field: 'branch_opening_date' },
+          { pattern: /software.?start/i,       field: 'software_start_date' },
+          { pattern: /billable.?month/i,       field: 'billable_month' },
+          { pattern: /mfi/i,                   field: 'mfi_autocomplete_input' },
+        ];
+        fieldMap.forEach(({ pattern, field }) => {
+          if (pattern.test(msg)) {
+            const el = document.getElementById(field);
+            const errId = field === 'mfi_autocomplete_input' ? 'err-mfi_id' : `err-${field}`;
+            const errEl = document.getElementById(errId);
+            if (el && errEl) { el.classList.add('is-invalid'); errEl.textContent = msg; mapped = true; }
+          }
+        });
+        if (!mapped) UI.toast('danger', 'Error Saving Branch', msg);
         saveBtn.disabled = false;
       }
     });
@@ -2840,30 +3082,36 @@ const BranchFormView = {
 
     if (!input || !menu) return;
 
+    let debounceTimer;
     input.addEventListener('input', () => {
-      const q = input.value.trim().toLowerCase();
+      clearTimeout(debounceTimer);
+      const q = input.value.trim();
       if (q.length < 1) {
-        menu.classList.remove('open');
+        menu.classList.remove('show');
         return;
       }
 
-      const matches = mfis.filter(m => 
-        m.short_name.toLowerCase().includes(q) ||
-        m.full_name.toLowerCase().includes(q)
-      ).slice(0, 8);
+      debounceTimer = setTimeout(async () => {
+        try {
+          const res = await fetch(`/api/mfis/autocomplete?q=${encodeURIComponent(q)}`);
+          const data = await res.json();
+          const matches = data.data || [];
 
-      if (matches.length === 0) {
-        menu.innerHTML = '<div class="autocomplete-empty">No matching MFI found</div>';
-      } else {
-        menu.innerHTML = matches.map(m => `
-          <div class="autocomplete-item" data-id="${m.id}" data-name="${m.short_name} — ${m.full_name}">
-            <div style="font-weight: 600; color: var(--primary);">${m.short_name}</div>
-            <div style="font-size: 11px; color: var(--text-muted);">${m.full_name}</div>
-          </div>
-        `).join('');
-      }
-
-      menu.classList.add('open');
+          if (matches.length === 0) {
+            menu.innerHTML = '<div class="autocomplete-empty">No matching MFI found</div>';
+          } else {
+            menu.innerHTML = matches.map(m => `
+              <div class="autocomplete-item" data-id="${m.id}" data-grace="${m.om_grace_period_months ?? 0}" data-name="${m.short_name} — ${m.full_name}">
+                <div style="font-weight: 600; color: var(--primary);">${m.short_name}</div>
+                <div style="font-size: 11px; color: var(--text-muted);">${m.full_name}</div>
+              </div>
+            `).join('');
+          }
+          menu.classList.add('show');
+        } catch (err) {
+          console.error('Autocomplete fetch error:', err);
+        }
+      }, 300);
     });
 
     menu.addEventListener('click', (e) => {
@@ -2871,16 +3119,79 @@ const BranchFormView = {
       if (!item) return;
 
       hiddenId.value = item.dataset.id;
+      hiddenId.dataset.grace = item.dataset.grace ?? 0;
       input.value = item.dataset.name;
       input.classList.remove('is-invalid');
-      menu.classList.remove('open');
+      menu.classList.remove('show');
+      // Recompute billable month after MFI selection
+      BranchFormView.recomputeBillableMonth(false);
     });
 
     document.addEventListener('click', (e) => {
       if (!input.contains(e.target) && !menu.contains(e.target)) {
-        menu.classList.remove('open');
+        menu.classList.remove('show');
       }
     });
+  },
+
+  /**
+   * Mirrors server-side computeBillableMonth logic in the browser.
+   * Rule: day <= 15 → current month is full month; day > 15 → skip to next month.
+   * Then add MFI om_grace_period_months.
+   */
+  /**
+   * Recomputes the billable month and optionally forces a UI update.
+   * @param {boolean} forceUpdate - If true, always overwrite the field value (e.g., Recalculate button).
+   *                                If false (default), only set if the field is currently empty.
+   */
+  recomputeBillableMonth(forceUpdate = false) {
+    const softwareStartEl = document.getElementById('software_start_date');
+    const billableEl      = document.getElementById('billable_month');
+    const mfiIdEl         = document.getElementById('mfi_id');
+
+    if (!softwareStartEl || !billableEl) return;
+
+    const dateVal = softwareStartEl.value;
+    if (!dateVal) {
+      if (forceUpdate) {
+        billableEl.value = '';
+        billableEl.dataset.manual = 'false';
+      }
+      return;
+    }
+
+    // Do not auto-compute if the user has manually edited, UNLESS explicitly forced
+    if (!forceUpdate && billableEl.dataset.manual === 'true') {
+      return;
+    }
+
+    const date  = new Date(dateVal + 'T00:00:00'); // parse as local date
+    const day   = date.getDate();
+    const grace = parseInt(mfiIdEl?.dataset?.grace || '0', 10) || 0;
+
+    // Step 1: determine base month (0-indexed)
+    let baseYear  = date.getFullYear();
+    let baseMonth = date.getMonth(); // 0-indexed
+
+    if (day > 15) {
+      // Partial month — skip to next month
+      baseMonth += 1;
+      if (baseMonth > 11) { baseMonth = 0; baseYear += 1; }
+    }
+
+    // Step 2: add grace period (handles negative grace too)
+    baseMonth += grace;
+    baseYear  += Math.floor(baseMonth / 12);
+    baseMonth  = ((baseMonth % 12) + 12) % 12;
+
+    const yyyy = String(baseYear).padStart(4, '0');
+    const mm   = String(baseMonth + 1).padStart(2, '0');
+    const computed = `${yyyy}-${mm}`;
+
+    billableEl.value = computed;
+    if (forceUpdate) {
+        billableEl.dataset.manual = 'false';
+    }
   }
 };
 
@@ -3302,7 +3613,22 @@ const AgreementFormView = {
         UI.toast('success', 'Agreement Saved', data.message);
         Router.navigate(`/mfi/${mfi_id}`);
       } catch (err) {
-        UI.toast('danger', 'Error', err.message);
+        const msg = err.message || '';
+        let mapped = false;
+        const fieldMap = [
+          { pattern: /mfi/i,                         field: 'agr_mfi_autocomplete', errId: 'err-agr_mfi_id' },
+          { pattern: /agreement.?date|renewal.?date/i, field: 'agreement_date',       errId: 'err-agreement_date' },
+          { pattern: /license.?fee/i,                field: 'license_fee_per_branch', errId: 'err-license_fee_per_branch' },
+          { pattern: /o.*m.?fee|om.?fee/i,            field: 'om_fee_per_branch',     errId: 'err-om_fee_per_branch' },
+        ];
+        fieldMap.forEach(({ pattern, field, errId }) => {
+          if (pattern.test(msg)) {
+            const el = document.getElementById(field);
+            const errEl = document.getElementById(errId || `err-${field}`);
+            if (el && errEl) { el.classList.add('is-invalid'); errEl.textContent = msg; mapped = true; }
+          }
+        });
+        if (!mapped) UI.toast('danger', 'Error Saving Agreement', msg);
         saveBtn.disabled = false;
       }
     });
