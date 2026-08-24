@@ -1,19 +1,21 @@
-# Hostinger Node.js & Static Frontend Configuration
+# Hostinger Node.js & SPA Frontend Configuration
 DirectoryIndex public/index.html index.html
 
 <IfModule mod_rewrite.c>
   RewriteEngine On
   RewriteBase /
 
-  # If requesting root /, serve public/index.html
-  RewriteRule ^$ public/index.html [L]
+  # Proxy API endpoints to local Node.js application running on port 3000
+  RewriteRule ^api/(.*)$ http://127.0.0.1:3000/api/$1 [P,L]
 
-  # If requested file exists in public/ directory, serve it
+  # Serve existing physical files directly from public directory
   RewriteCond %{DOCUMENT_ROOT}/public/$1 -f
   RewriteRule ^(.*)$ public/$1 [L]
 
-  # Proxy API endpoints to local Node.js application running on port 3000
-  RewriteRule ^api/(.*)$ http://127.0.0.1:3000/api/$1 [P,L]
+  # Fallback all SPA routes (/login, /mfi, /dashboard, etc.) to public/index.html
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule ^(.*)$ public/index.html [L]
 </IfModule>
 
 
