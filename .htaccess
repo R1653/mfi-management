@@ -1,13 +1,12 @@
-# Hostinger Webserver & SPA Configuration
-DirectoryIndex public/login.html index.html
-
-# Disable Hostinger hPanel Passenger Node Engine to prevent server.js text dumping
+# Hostinger Webserver & Node.js Application Configuration
 <IfModule mod_passenger.c>
-  PassengerEngine off
+  PassengerEngine on
+  PassengerAppType node
+  PassengerStartupFile app.js
 </IfModule>
 
 # Block access to app.js, server.js and sensitive configuration files
-<FilesMatch "^(app\.js|server\.js|\.env|\.gitignore|package\.json|package-lock\.json)$">
+<FilesMatch "^(app\.js|server\.js|\.env|\.gitignore|package\.json|package-lock\.json|knexfile\.js)$">
     <IfModule mod_authz_core.c>
         Require all denied
     </IfModule>
@@ -21,21 +20,14 @@ DirectoryIndex public/login.html index.html
   RewriteEngine On
   RewriteBase /
 
-  # Proxy API endpoints to local Node.js process on port 3000
-  RewriteRule ^api/(.*)$ http://127.0.0.1:3000/api/$1 [P,QSA,L]
-
   # Serve existing physical files directly from public directory
   RewriteCond %{DOCUMENT_ROOT}/public/$1 -f
   RewriteRule ^(.*)$ public/$1 [L]
 
-  # Route root URL / and /login explicitly to public/login.html
-  RewriteRule ^$ public/login.html [L]
-  RewriteRule ^login/?$ public/login.html [L]
-
-  # Route all protected SPA routes (/dashboard, /mfi, etc.) to public/index.html
+  # Fallback non-file requests to app.js
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d
-  RewriteRule ^(.*)$ public/index.html [L]
+  RewriteRule ^(.*)$ app.js [QSA,L]
 </IfModule>
 
 
