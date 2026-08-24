@@ -1,20 +1,19 @@
-# Hostinger Node.js Reverse Proxy Configuration
+# Hostinger Node.js & Static Frontend Configuration
+DirectoryIndex public/index.html index.html
+
 <IfModule mod_rewrite.c>
   RewriteEngine On
-  
-  # Serve existing static files from public directory
-  RewriteCond %{DOCUMENT_ROOT}/public%{REQUEST_URI} -f
-  RewriteRule ^(.+)$ public/$1 [L]
+  RewriteBase /
 
-  # Proxy all web requests to Node.js backend running on port 3000
-  RewriteCond %{REQUEST_FILENAME} !-f
-  RewriteCond %{REQUEST_FILENAME} !-d
-  RewriteRule ^(.*)$ http://127.0.0.1:3000/$1 [P,L]
+  # If requesting root /, serve public/index.html
+  RewriteRule ^$ public/index.html [L]
+
+  # If requested file exists in public/ directory, serve it
+  RewriteCond %{DOCUMENT_ROOT}/public/$1 -f
+  RewriteRule ^(.*)$ public/$1 [L]
+
+  # Proxy API endpoints to local Node.js application running on port 3000
+  RewriteRule ^api/(.*)$ http://127.0.0.1:3000/api/$1 [P,L]
 </IfModule>
 
-<IfModule mod_passenger.c>
-  PassengerEngine on
-  PassengerAppType node
-  PassengerStartupFile server.js
-</IfModule>
 
