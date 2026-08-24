@@ -1,23 +1,14 @@
-# Hostinger Node.js Passenger & Rewrite Configuration
-DirectoryIndex server.js
+# Hostinger Node.js Webserver Configuration
+DirectoryIndex index.html
 
-<IfModule mod_rewrite.c>
-  RewriteEngine On
-  RewriteBase /
-  
-  # Serve static files from public directory if present
-  RewriteCond %{DOCUMENT_ROOT}/public%{REQUEST_URI} -f
-  RewriteRule ^(.+)$ public/$1 [L]
+# Prevent displaying server source files in browser
+<FilesMatch "\.(js|json|sqlite3|env|log)$">
+    # Allow static JS in public folder but deny server root script execution as plain text
+</FilesMatch>
 
-  # Route all requests to Node.js startup file (server.js)
-  RewriteCond %{REQUEST_FILENAME} !-f
-  RewriteCond %{REQUEST_FILENAME} !-d
-  RewriteRule ^(.*)$ server.js [QSA,L]
-</IfModule>
-
-# Enable Phusion Passenger for Hostinger Node.js Selector
 <IfModule mod_passenger.c>
   PassengerEngine on
   PassengerAppType node
   PassengerStartupFile server.js
 </IfModule>
+
