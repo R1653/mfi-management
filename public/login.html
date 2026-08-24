@@ -503,6 +503,16 @@
   </div>
 
   <script>
+    // Auto-redirect to dashboard if already logged in
+    (async function checkExistingSession() {
+      try {
+        const res = await fetch('/api/auth/me');
+        if (res.ok) {
+          window.location.href = '/dashboard';
+        }
+      } catch (e) {}
+    })();
+
     // Password visibility toggle
     const passwordInput = document.getElementById('password');
     const passwordToggle = document.getElementById('password-toggle');

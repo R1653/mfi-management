@@ -1,5 +1,5 @@
 # Hostinger Webserver & SPA Configuration
-DirectoryIndex index.html public/index.html
+DirectoryIndex public/login.html index.html
 
 # Disable Hostinger hPanel Passenger Node Engine to prevent server.js text dumping
 <IfModule mod_passenger.c>
@@ -28,10 +28,11 @@ DirectoryIndex index.html public/index.html
   RewriteCond %{DOCUMENT_ROOT}/public/$1 -f
   RewriteRule ^(.*)$ public/$1 [L]
 
-  # Route /login explicitly to public/login.html
+  # Route root URL / and /login explicitly to public/login.html
+  RewriteRule ^$ public/login.html [L]
   RewriteRule ^login/?$ public/login.html [L]
 
-  # Route root / and all protected SPA routes to public/index.html
+  # Route all protected SPA routes (/dashboard, /mfi, etc.) to public/index.html
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d
   RewriteRule ^(.*)$ public/index.html [L]
