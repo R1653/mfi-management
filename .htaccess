@@ -1,5 +1,5 @@
 # Hostinger Webserver & SPA Configuration
-DirectoryIndex public/index.html index.html
+DirectoryIndex index.html public/index.html
 
 # Disable Hostinger hPanel Passenger Node Engine to prevent server.js text dumping
 <IfModule mod_passenger.c>
