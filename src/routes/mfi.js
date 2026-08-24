@@ -193,6 +193,7 @@ router.get('/', requireAuth, requirePermission('mfi.view'), async (req, res) => 
         current_license_fee: applicableAgreement ? applicableAgreement.license_fee_per_branch : parseFloat(mfi.initial_license_fee),
         current_om_fee: applicableAgreement ? applicableAgreement.om_fee_per_branch : parseFloat(mfi.initial_om_fee),
         current_fee_effective_date: applicableAgreement ? applicableAgreement.agreement_date : mfi.initial_agreement_date,
+        agreement_expire_date: mfi.agreement_expire_date ? dayjs(mfi.agreement_expire_date).format('YYYY-MM-DD') : (applicableAgreement ? applicableAgreement.agreement_expire_date : null),
         total_branches: parseInt(branchCountRow?.count || 0, 10)
       };
     }));
@@ -237,6 +238,7 @@ router.get('/export', requireAuth, requirePermission('report.export'), async (re
         short_name: mfi.short_name,
         establish_date: dayjs(mfi.establish_date).format('YYYY-MM-DD'),
         initial_agreement_date: dayjs(mfi.initial_agreement_date).format('YYYY-MM-DD'),
+        agreement_expire_date: mfi.agreement_expire_date ? dayjs(mfi.agreement_expire_date).format('YYYY-MM-DD') : (fee ? fee.agreement_expire_date : 'N/A'),
         branches: branchCount?.c || 0,
         license_fee: fee ? fee.license_fee_per_branch : parseFloat(mfi.initial_license_fee),
         om_fee: fee ? fee.om_fee_per_branch : parseFloat(mfi.initial_om_fee),
@@ -257,6 +259,7 @@ router.get('/export', requireAuth, requirePermission('report.export'), async (re
       { header: 'Short Name', key: 'short_name', width: 14 },
       { header: 'Establish Date', key: 'establish_date', width: 15 },
       { header: 'Initial Agreement', key: 'initial_agreement_date', width: 16 },
+      { header: 'Agreement Expire Date', key: 'agreement_expire_date', width: 20 },
       { header: 'Branches', key: 'branches', width: 10 },
       { header: 'License Fee', key: 'license_fee', width: 18 },
       { header: 'O&M Fee', key: 'om_fee', width: 18 },
@@ -358,6 +361,10 @@ router.get('/:id', requireAuth, requirePermission('mfi.view'), async (req, res) 
       .whereNull('deleted_at')
       .orderBy('branch_code', 'asc');
 
+    if (!mfi.agreement_expire_date && currentFee && currentFee.agreement_expire_date) {
+      mfi.agreement_expire_date = currentFee.agreement_expire_date;
+    }
+
     res.json({
       success: true,
       data: {
@@ -365,7 +372,8 @@ router.get('/:id', requireAuth, requirePermission('mfi.view'), async (req, res) 
         currentFee: currentFee || {
           license_fee_per_branch: parseFloat(mfi.initial_license_fee),
           om_fee_per_branch: parseFloat(mfi.initial_om_fee),
-          agreement_date: mfi.initial_agreement_date
+          agreement_date: mfi.initial_agreement_date,
+          agreement_expire_date: mfi.agreement_expire_date || null
         },
         branchSummary: {
           total: parseInt(branchStats.total || 0, 10),
@@ -397,6 +405,7 @@ router.post('/', requireAuth, requirePermission('mfi.create'), async (req, res) 
       short_name,
       establish_date,
       initial_agreement_date,
+      agreement_expire_date = null,
       initial_license_fee = 0,
       initial_om_fee = 0,
       initial_branch_count = 0,
@@ -478,11 +487,14 @@ router.post('/', requireAuth, requirePermission('mfi.create'), async (req, res) 
     }
 
     // 1. Insert MFI
+    const agreementExpireFormatted = agreement_expire_date ? dayjs(agreement_expire_date).format('YYYY-MM-DD') : null;
+
     const [mfiId] = await trx('mfi').insert({
       full_name: full_name.trim(),
       short_name: cleanShortName,
       establish_date: dayjs(establish_date).format('YYYY-MM-DD'),
       initial_agreement_date: dayjs(initial_agreement_date).format('YYYY-MM-DD'),
+      agreement_expire_date: agreementExpireFormatted,
       initial_license_fee: licenseFeeNum,
       initial_om_fee: omFeeNum,
       initial_branch_count: branchCountNum,
@@ -501,6 +513,7 @@ router.post('/', requireAuth, requirePermission('mfi.create'), async (req, res) 
     await trx('mfi_agreements').insert({
       mfi_id: mfiId,
       agreement_date: dayjs(initial_agreement_date).format('YYYY-MM-DD'),
+      agreement_expire_date: agreementExpireFormatted,
       license_fee_per_branch: licenseFeeNum,
       om_fee_per_branch: omFeeNum,
       remarks: 'Initial agreement created during MFI registration.',
@@ -575,6 +588,7 @@ router.put('/:id', requireAuth, requirePermission('mfi.update'), async (req, res
       full_name,
       short_name,
       establish_date,
+      agreement_expire_date,
       is_head_office_billable,
       om_grace_period_months,
       team_id,
@@ -622,6 +636,22 @@ router.put('/:id', requireAuth, requirePermission('mfi.update'), async (req, res
 
     if (establish_date) {
       updatePayload.establish_date = dayjs(establish_date).format('YYYY-MM-DD');
+    }
+
+    if (agreement_expire_date !== undefined) {
+      updatePayload.agreement_expire_date = agreement_expire_date ? dayjs(agreement_expire_date).format('YYYY-MM-DD') : null;
+      
+      // Sync agreement_expire_date with latest mfi_agreements record
+      const latestAgreement = await db('mfi_agreements')
+        .where('mfi_id', id)
+        .orderBy('agreement_date', 'desc')
+        .orderBy('id', 'desc')
+        .first();
+      if (latestAgreement) {
+        await db('mfi_agreements')
+          .where('id', latestAgreement.id)
+          .update({ agreement_expire_date: updatePayload.agreement_expire_date });
+      }
     }
 
     if (is_head_office_billable !== undefined) {

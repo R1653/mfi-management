@@ -82,6 +82,7 @@ router.get('/', requireAuth, requirePermission('agreement.view'), async (req, re
         'mfi_agreements.*',
         'mfi.short_name as mfi_short_name',
         'mfi.full_name as mfi_full_name',
+        'mfi.agreement_expire_date as mfi_expire_date',
         'creator.name as creator_name'
       );
 
@@ -118,6 +119,7 @@ router.get('/', requireAuth, requirePermission('agreement.view'), async (req, re
     const enrichedData = result.data.map((agr, index) => {
       const agrDate = dayjs(agr.agreement_date).format('YYYY-MM-DD');
       const isUpcoming = agrDate > today;
+      const rawExpire = agr.agreement_expire_date || agr.mfi_expire_date || null;
 
       return {
         ...agr,
@@ -125,6 +127,7 @@ router.get('/', requireAuth, requirePermission('agreement.view'), async (req, re
         license_fee_per_branch: parseFloat(agr.license_fee_per_branch),
         om_fee_per_branch: parseFloat(agr.om_fee_per_branch),
         agreement_date_formatted: agrDate,
+        agreement_expire_date: rawExpire ? dayjs(rawExpire).format('YYYY-MM-DD') : null,
         created_at_formatted: dayjs(agr.created_at).format('YYYY-MM-DD HH:mm'),
         is_upcoming: isUpcoming
       };
@@ -176,6 +179,7 @@ router.get('/export', requireAuth, requirePermission('report.export'), async (re
       sl: idx + 1,
       mfi: `${a.mfi_short_name} - ${a.mfi_full_name}`,
       agreement_date: dayjs(a.agreement_date).format('YYYY-MM-DD'),
+      agreement_expire_date: a.agreement_expire_date ? dayjs(a.agreement_expire_date).format('YYYY-MM-DD') : 'N/A',
       license_fee: parseFloat(a.license_fee_per_branch),
       om_fee: parseFloat(a.om_fee_per_branch),
       remarks: a.remarks || 'N/A',
@@ -194,6 +198,7 @@ router.get('/export', requireAuth, requirePermission('report.export'), async (re
       { header: 'SL', key: 'sl', width: 8 },
       { header: 'MFI', key: 'mfi', width: 28 },
       { header: 'Agreement / Renewal Date', key: 'agreement_date', width: 20 },
+      { header: 'Agreement Expire Date', key: 'agreement_expire_date', width: 20 },
       { header: 'License Fee', key: 'license_fee', width: 18 },
       { header: 'O&M Fee', key: 'om_fee', width: 18 },
       { header: 'Remarks', key: 'remarks', width: 30 },
@@ -249,6 +254,7 @@ router.get('/:id', requireAuth, requirePermission('agreement.view'), async (req,
         'mfi_agreements.*',
         'mfi.short_name as mfi_short_name',
         'mfi.full_name as mfi_full_name',
+        'mfi.agreement_expire_date as mfi_expire_date',
         'creator.name as creator_name',
         'updater.name as updater_name'
       )
@@ -258,13 +264,16 @@ router.get('/:id', requireAuth, requirePermission('agreement.view'), async (req,
       return res.status(404).json({ success: false, message: 'Agreement record not found.' });
     }
 
+    const rawExpire = agreement.agreement_expire_date || agreement.mfi_expire_date || null;
+
     res.json({
       success: true,
       data: {
         ...agreement,
         license_fee_per_branch: parseFloat(agreement.license_fee_per_branch),
         om_fee_per_branch: parseFloat(agreement.om_fee_per_branch),
-        agreement_date_formatted: dayjs(agreement.agreement_date).format('YYYY-MM-DD')
+        agreement_date_formatted: dayjs(agreement.agreement_date).format('YYYY-MM-DD'),
+        agreement_expire_date: rawExpire ? dayjs(rawExpire).format('YYYY-MM-DD') : null
       }
     });
   } catch (error) {
@@ -283,6 +292,7 @@ router.post('/', requireAuth, requirePermission('agreement.create'), async (req,
     const {
       mfi_id,
       agreement_date,
+      agreement_expire_date = null,
       license_fee_per_branch,
       om_fee_per_branch,
       remarks = ''
@@ -302,6 +312,7 @@ router.post('/', requireAuth, requirePermission('agreement.create'), async (req,
     }
 
     const formattedDate = dayjs(agreement_date).format('YYYY-MM-DD');
+    const formattedExpireDate = agreement_expire_date ? dayjs(agreement_expire_date).format('YYYY-MM-DD') : null;
 
     // Prevent duplicate agreement records for the same MFI and effective date
     const existing = await db('mfi_agreements')
@@ -332,6 +343,7 @@ router.post('/', requireAuth, requirePermission('agreement.create'), async (req,
     const [agreementId] = await db('mfi_agreements').insert({
       mfi_id,
       agreement_date: formattedDate,
+      agreement_expire_date: formattedExpireDate,
       license_fee_per_branch: licenseFeeNum,
       om_fee_per_branch: omFeeNum,
       remarks: remarks ? remarks.trim() : null,
@@ -340,6 +352,19 @@ router.post('/', requireAuth, requirePermission('agreement.create'), async (req,
       created_at: new Date(),
       updated_at: new Date()
     });
+
+    // Update parent MFI's agreement_expire_date if this agreement is latest
+    const latestAgr = await db('mfi_agreements')
+      .where('mfi_id', mfi_id)
+      .orderBy('agreement_date', 'desc')
+      .first();
+
+    if (latestAgr && latestAgr.id === agreementId) {
+      await db('mfi').where('id', mfi_id).update({
+        agreement_expire_date: formattedExpireDate,
+        updated_at: new Date()
+      });
+    }
 
     await AuditService.log({
       userId,
@@ -371,6 +396,7 @@ router.put('/:id', requireAuth, requirePermission('agreement.update'), async (re
     const { id } = req.params;
     const {
       agreement_date,
+      agreement_expire_date,
       license_fee_per_branch,
       om_fee_per_branch,
       remarks
@@ -382,6 +408,9 @@ router.put('/:id', requireAuth, requirePermission('agreement.update'), async (re
     }
 
     const formattedDate = agreement_date ? dayjs(agreement_date).format('YYYY-MM-DD') : existing.agreement_date;
+    const formattedExpireDate = agreement_expire_date !== undefined 
+      ? (agreement_expire_date ? dayjs(agreement_expire_date).format('YYYY-MM-DD') : null)
+      : existing.agreement_expire_date;
 
     // Check duplicate if date changed
     if (formattedDate !== existing.agreement_date) {
@@ -412,6 +441,7 @@ router.put('/:id', requireAuth, requirePermission('agreement.update'), async (re
     const userId = req.session.user.id;
     const updatePayload = {
       agreement_date: formattedDate,
+      agreement_expire_date: formattedExpireDate,
       license_fee_per_branch: licenseFeeNum,
       om_fee_per_branch: omFeeNum,
       remarks: remarks !== undefined ? (remarks ? remarks.trim() : null) : existing.remarks,
@@ -420,6 +450,20 @@ router.put('/:id', requireAuth, requirePermission('agreement.update'), async (re
     };
 
     await db('mfi_agreements').where('id', id).update(updatePayload);
+
+    // Re-sync MFI to ALWAYS match the latest agreement's expire date
+    const latestAgr = await db('mfi_agreements')
+      .where('mfi_id', existing.mfi_id)
+      .orderBy('agreement_date', 'desc')
+      .orderBy('id', 'desc')
+      .first();
+
+    if (latestAgr) {
+      await db('mfi').where('id', existing.mfi_id).update({
+        agreement_expire_date: latestAgr.agreement_expire_date,
+        updated_at: new Date()
+      });
+    }
 
     await AuditService.log({
       userId,
@@ -469,6 +513,20 @@ router.delete('/:id', requireAuth, requirePermission('agreement.delete'), async 
     }
 
     await db('mfi_agreements').where('id', id).del();
+
+    // Re-sync MFI to ALWAYS match the latest agreement after deletion
+    const latestAgr = await db('mfi_agreements')
+      .where('mfi_id', agreement.mfi_id)
+      .orderBy('agreement_date', 'desc')
+      .orderBy('id', 'desc')
+      .first();
+
+    if (latestAgr) {
+      await db('mfi').where('id', agreement.mfi_id).update({
+        agreement_expire_date: latestAgr.agreement_expire_date,
+        updated_at: new Date()
+      });
+    }
 
     await AuditService.log({
       userId: req.session.user.id,

@@ -119,6 +119,12 @@ const UI = {
     return str;
   },
 
+  formatDateForInput(val) {
+    if (!val || val === 'N/A') return '';
+    const formatted = UI.formatDate(val);
+    return formatted === 'N/A' ? '' : formatted;
+  },
+
   formatDateTime(val) {
     if (!val) return 'N/A';
     if (typeof val === 'object' && !(val instanceof Date)) {
@@ -1535,6 +1541,7 @@ const MfiListView = {
                 <th>Short Name</th>
                 <th>Establish Date</th>
                 <th>Initial Agreement</th>
+                <th>Agreement Expire Date</th>
                 <th>Branches</th>
                 <th>Current License Fee</th>
                 <th>Current O&M Fee</th>
@@ -1543,7 +1550,7 @@ const MfiListView = {
               </tr>
             </thead>
             <tbody id="mfi-table-body">
-              <tr><td colspan="10" style="text-align:center; padding: 30px;">Loading records...</td></tr>
+              <tr><td colspan="11" style="text-align:center; padding: 30px;">Loading records...</td></tr>
             </tbody>
           </table>
         </div>
@@ -1570,7 +1577,7 @@ const MfiListView = {
     if (!result.data || result.data.length === 0) {
       tbody.innerHTML = `
         <tr>
-          <td colspan="10">
+          <td colspan="11">
             <div class="empty-state">
               <h3 class="empty-state-title">No MFI Records Found</h3>
               <p class="empty-state-text">No records match your filter criteria.</p>
@@ -1592,6 +1599,7 @@ const MfiListView = {
         <td><span class="badge badge-neutral" style="font-weight:700;">${mfi.short_name}</span></td>
         <td>${UI.formatDate(mfi.establish_date)}</td>
         <td>${UI.formatDate(mfi.initial_agreement_date)}</td>
+        <td>${mfi.agreement_expire_date ? UI.formatDate(mfi.agreement_expire_date) : '<span style="color:var(--text-muted);">Not Set</span>'}</td>
         <td><a href="/branches?mfi_id=${mfi.id}" class="badge badge-current">${mfi.total_branches} Branches</a></td>
         <td><strong>${UI.formatCurrency(mfi.current_license_fee)}</strong></td>
         <td><strong>${UI.formatCurrency(mfi.current_om_fee)}</strong></td>
@@ -1730,6 +1738,7 @@ const MfiFormView = {
       short_name: '',
       establish_date: '',
       initial_agreement_date: '',
+      agreement_expire_date: '',
       initial_license_fee: 0,
       initial_om_fee: 0,
       initial_branch_count: 0,
@@ -1794,18 +1803,25 @@ const MfiFormView = {
               </div>
 
               <!-- Form Grid 2 -->
-              <div class="form-grid-2">
+              <div class="form-grid-3">
                 <div class="form-group">
                   <label class="form-label" for="establish_date">MFI Establish Date <span class="required-star">*</span></label>
-                  <input type="date" id="establish_date" class="form-control" required value="${UI.formatDate(mfi.establish_date)}">
+                  <input type="date" id="establish_date" class="form-control" required value="${UI.formatDateForInput(mfi.establish_date)}">
                   <div class="invalid-feedback" id="err-establish_date"></div>
                 </div>
 
                 <div class="form-group">
                   <label class="form-label" for="initial_agreement_date">Initial Agreement Date <span class="required-star">*</span></label>
-                  <input type="date" id="initial_agreement_date" class="form-control" ${isEdit ? 'disabled' : 'required'} value="${UI.formatDate(mfi.initial_agreement_date)}">
-                  <div class="form-hint">${isEdit ? 'Agreement dates are managed in Agreement History' : 'Cannot be earlier than establish date'}</div>
+                  <input type="date" id="initial_agreement_date" class="form-control" ${isEdit ? 'disabled' : 'required'} value="${UI.formatDateForInput(mfi.initial_agreement_date)}">
+                  <div class="form-hint">${isEdit ? 'Managed in Agreement History' : 'Cannot be earlier than establish date'}</div>
                   <div class="invalid-feedback" id="err-initial_agreement_date"></div>
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label" for="agreement_expire_date">Agreement Expire Date</label>
+                  <input type="date" id="agreement_expire_date" class="form-control" value="${UI.formatDateForInput(mfi.agreement_expire_date)}">
+                  <div class="form-hint">Expiry date of agreement. Used for Renewal Alerts.</div>
+                  <div class="invalid-feedback" id="err-agreement_expire_date"></div>
                 </div>
               </div>
 
@@ -1943,6 +1959,7 @@ const MfiFormView = {
       const short_name = document.getElementById('short_name').value.trim();
       const establish_date = document.getElementById('establish_date').value;
       const initial_agreement_date = document.getElementById('initial_agreement_date').value;
+      const agreement_expire_date = document.getElementById('agreement_expire_date').value || null;
       const initial_license_fee = document.getElementById('initial_license_fee').value;
       const initial_om_fee = document.getElementById('initial_om_fee').value;
       const initial_branch_count = document.getElementById('initial_branch_count').value;
@@ -2006,6 +2023,7 @@ const MfiFormView = {
         short_name,
         establish_date,
         initial_agreement_date,
+        agreement_expire_date,
         initial_license_fee,
         initial_om_fee,
         initial_branch_count,
@@ -2042,7 +2060,8 @@ const MfiFormView = {
           { pattern: /full.?name/i,          field: 'full_name' },
           { pattern: /short.?name/i,         field: 'short_name' },
           { pattern: /establish.?date/i,     field: 'establish_date' },
-          { pattern: /agreement.?date/i,     field: 'initial_agreement_date' },
+          { pattern: /initial.?agreement.?date/i, field: 'initial_agreement_date' },
+          { pattern: /expire.?date/i,        field: 'agreement_expire_date' },
           { pattern: /license.?fee/i,        field: 'initial_license_fee' },
           { pattern: /o.*m.?fee|om.?fee/i,   field: 'initial_om_fee' },
           { pattern: /grace.?period/i,       field: 'om_grace_period_months' },
@@ -2120,6 +2139,12 @@ const MfiProfileView = {
                 <div style="font-weight: 600; margin-top: 2px;">${UI.formatDate(mfi.initial_agreement_date)}</div>
               </div>
               <div>
+                <div style="color: var(--text-muted);">Agreement Expire Date:</div>
+                <div style="font-weight: 600; margin-top: 2px;">
+                  ${mfi.agreement_expire_date ? `<span class="badge ${new Date(mfi.agreement_expire_date) <= new Date() ? 'badge-inactive' : 'badge-neutral'}">${UI.formatDate(mfi.agreement_expire_date)}</span>` : '<span style="color: var(--text-muted);">Not Set</span>'}
+                </div>
+              </div>
+              <div>
                 <div style="color: var(--text-muted);">Initial Branch Count:</div>
                 <div style="font-weight: 600; margin-top: 2px;">${mfi.initial_branch_count}</div>
               </div>
@@ -2178,10 +2203,11 @@ const MfiProfileView = {
               </div>
             </div>
 
-            <div style="margin-top: 18px; padding-top: 14px; border-top: 1px dashed var(--border-color); font-size: 12px; color: var(--text-muted);">
-              Effective Date: <strong>${UI.formatDate(currentFee.agreement_date)}</strong>
-              ${currentFee.remarks ? `<div style="margin-top:4px;">Remarks: <em>${currentFee.remarks}</em></div>` : ''}
+            <div style="margin-top: 18px; padding-top: 14px; border-top: 1px dashed var(--border-color); font-size: 12px; color: var(--text-muted); display: flex; justify-content: space-between;">
+              <span>Effective Date: <strong>${UI.formatDate(currentFee.agreement_date)}</strong></span>
+              <span>Agreement Expire Date: <strong>${currentFee.agreement_expire_date ? UI.formatDate(currentFee.agreement_expire_date) : 'Not Set'}</strong></span>
             </div>
+            ${currentFee.remarks ? `<div style="margin-top:4px; font-size: 12px; color: var(--text-muted);">Remarks: <em>${currentFee.remarks}</em></div>` : ''}
           </div>
         </div>
       </div>
@@ -2356,7 +2382,11 @@ const MfiProfileView = {
         <form id="modal-agr-profile-edit-form">
           <div class="form-group">
             <label class="form-label" for="edit_p_agr_date">Agreement Effective Date <span class="required-star">*</span></label>
-            <input type="date" id="edit_p_agr_date" class="form-control" required value="${UI.formatDate(agr.agreement_date)}">
+            <input type="date" id="edit_p_agr_date" class="form-control" required value="${UI.formatDateForInput(agr.agreement_date)}">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="edit_p_agr_expire_date">Agreement Expire Date</label>
+            <input type="date" id="edit_p_agr_expire_date" class="form-control" value="${UI.formatDateForInput(agr.agreement_expire_date)}">
           </div>
           <div class="form-grid-2">
             <div class="form-group">
@@ -2384,6 +2414,7 @@ const MfiProfileView = {
 
       document.getElementById('modal-p-agr-save-btn').onclick = async () => {
         const agreement_date = document.getElementById('edit_p_agr_date').value;
+        const agreement_expire_date = document.getElementById('edit_p_agr_expire_date').value || null;
         const license_fee_per_branch = parseFloat(document.getElementById('edit_p_license_fee').value);
         const om_fee_per_branch = parseFloat(document.getElementById('edit_p_om_fee').value);
         const remarks = document.getElementById('edit_p_remarks').value;
@@ -2397,7 +2428,7 @@ const MfiProfileView = {
           const updateRes = await fetch(`/api/agreements/${agrId}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ agreement_date, license_fee_per_branch, om_fee_per_branch, remarks })
+            body: JSON.stringify({ agreement_date, agreement_expire_date, license_fee_per_branch, om_fee_per_branch, remarks })
           });
           const updateData = await updateRes.json();
           if (!updateRes.ok) throw new Error(updateData.message);
@@ -3263,6 +3294,7 @@ const AgreementListView = {
                 <th style="width: 50px;">SL</th>
                 <th>MFI</th>
                 <th>Agreement / Renewal Date</th>
+                <th>Agreement Expire Date</th>
                 <th>License Fee per Branch</th>
                 <th>O&M Fee per Branch</th>
                 <th>Status</th>
@@ -3273,7 +3305,7 @@ const AgreementListView = {
               </tr>
             </thead>
             <tbody id="agr-table-body">
-              <tr><td colspan="10" style="text-align:center; padding: 30px;">Loading agreements...</td></tr>
+              <tr><td colspan="11" style="text-align:center; padding: 30px;">Loading agreements...</td></tr>
             </tbody>
           </table>
         </div>
@@ -3300,7 +3332,7 @@ const AgreementListView = {
     if (!result.data || result.data.length === 0) {
       tbody.innerHTML = `
         <tr>
-          <td colspan="10">
+          <td colspan="11">
             <div class="empty-state">
               <h3 class="empty-state-title">No Agreements Found</h3>
               <p class="empty-state-text">No agreement records match your search criteria.</p>
@@ -3323,6 +3355,7 @@ const AgreementListView = {
           </a>
         </td>
         <td><strong>${a.agreement_date_formatted}</strong></td>
+        <td>${a.agreement_expire_date ? UI.formatDate(a.agreement_expire_date) : '<span style="color:var(--text-muted);">Not Set</span>'}</td>
         <td><strong style="color: var(--primary);">${UI.formatCurrency(a.license_fee_per_branch)}</strong></td>
         <td><strong style="color: var(--warning);">${UI.formatCurrency(a.om_fee_per_branch)}</strong></td>
         <td>
@@ -3383,9 +3416,15 @@ const AgreementListView = {
             <label class="form-label">MFI</label>
             <input type="text" class="form-control" disabled value="${agr.mfi_short_name} — ${agr.mfi_full_name}">
           </div>
-          <div class="form-group">
-            <label class="form-label" for="edit_agr_date">Agreement Effective Date <span class="required-star">*</span></label>
-            <input type="date" id="edit_agr_date" class="form-control" required value="${UI.formatDate(agr.agreement_date)}">
+          <div class="form-grid-2">
+            <div class="form-group">
+              <label class="form-label" for="edit_agr_date">Agreement Effective Date <span class="required-star">*</span></label>
+              <input type="date" id="edit_agr_date" class="form-control" required value="${UI.formatDateForInput(agr.agreement_date)}">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="edit_agr_expire_date">Agreement Expire Date</label>
+              <input type="date" id="edit_agr_expire_date" class="form-control" value="${UI.formatDateForInput(agr.agreement_expire_date)}">
+            </div>
           </div>
           <div class="form-grid-2">
             <div class="form-group">
@@ -3413,6 +3452,7 @@ const AgreementListView = {
 
       document.getElementById('modal-agr-save-btn').onclick = async () => {
         const agreement_date = document.getElementById('edit_agr_date').value;
+        const agreement_expire_date = document.getElementById('edit_agr_expire_date').value || null;
         const license_fee_per_branch = parseFloat(document.getElementById('edit_license_fee').value);
         const om_fee_per_branch = parseFloat(document.getElementById('edit_om_fee').value);
         const remarks = document.getElementById('edit_remarks').value;
@@ -3426,7 +3466,7 @@ const AgreementListView = {
           const updateRes = await fetch(`/api/agreements/${id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ agreement_date, license_fee_per_branch, om_fee_per_branch, remarks })
+            body: JSON.stringify({ agreement_date, agreement_expire_date, license_fee_per_branch, om_fee_per_branch, remarks })
           });
           const updateData = await updateRes.json();
           if (!updateRes.ok) throw new Error(updateData.message);
@@ -3511,11 +3551,20 @@ const AgreementFormView = {
                 <div class="invalid-feedback" id="err-agr_mfi_id"></div>
               </div>
 
-              <div class="form-group">
-                <label class="form-label" for="agreement_date">Agreement / Renewal Effective Date <span class="required-star">*</span></label>
-                <input type="date" id="agreement_date" class="form-control" required value="${new Date().toISOString().substring(0, 10)}">
-                <div class="form-hint">Future-dated agreements are fully supported and will automatically take effect on the specified date.</div>
-                <div class="invalid-feedback" id="err-agreement_date"></div>
+              <div class="form-grid-2">
+                <div class="form-group">
+                  <label class="form-label" for="agreement_date">Agreement / Renewal Effective Date <span class="required-star">*</span></label>
+                  <input type="date" id="agreement_date" class="form-control" required value="${new Date().toISOString().substring(0, 10)}">
+                  <div class="form-hint">Effective date of agreement.</div>
+                  <div class="invalid-feedback" id="err-agreement_date"></div>
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label" for="agreement_expire_date">Agreement Expire Date</label>
+                  <input type="date" id="agreement_expire_date" class="form-control">
+                  <div class="form-hint">Date when this agreement expires. Triggers Renewal Alert when past.</div>
+                  <div class="invalid-feedback" id="err-agreement_expire_date"></div>
+                </div>
               </div>
 
               <div class="form-grid-2">
@@ -3561,6 +3610,7 @@ const AgreementFormView = {
 
       const mfi_id = document.getElementById('agr_mfi_id').value;
       const agreement_date = document.getElementById('agreement_date').value;
+      const agreement_expire_date = document.getElementById('agreement_expire_date').value || null;
       const license_fee_per_branch = document.getElementById('license_fee_per_branch').value;
       const om_fee_per_branch = document.getElementById('om_fee_per_branch').value;
       const remarks = document.getElementById('remarks').value;
@@ -3592,6 +3642,7 @@ const AgreementFormView = {
       const payload = {
         mfi_id: parseInt(mfi_id),
         agreement_date,
+        agreement_expire_date,
         license_fee_per_branch: parseFloat(license_fee_per_branch),
         om_fee_per_branch: parseFloat(om_fee_per_branch),
         remarks
@@ -4601,7 +4652,8 @@ const ReportsView = {
             <thead>
               <tr>
                 <th>MFI</th>
-                <th>Last Signed Agreement</th>
+                <th>Agreement Date</th>
+                <th>Agreement Expire Date</th>
                 <th>License Fee</th>
                 <th>O&M Fee</th>
                 <th>Status</th>
@@ -4609,11 +4661,12 @@ const ReportsView = {
               </tr>
             </thead>
             <tbody>
-              ${alerts.expired.length === 0 ? '<tr><td colspan="6" style="text-align:center; padding: 20px;">No overdue agreements.</td></tr>' : ''}
+              ${alerts.expired.length === 0 ? '<tr><td colspan="7" style="text-align:center; padding: 20px;">No overdue agreements.</td></tr>' : ''}
               ${alerts.expired.map(item => `
                 <tr>
                   <td><strong>${item.mfi.short_name} — ${item.mfi.full_name}</strong></td>
                   <td>${item.agreement ? UI.formatDate(item.agreement.agreement_date) : 'No prior agreement'}</td>
+                  <td><strong style="color: var(--danger);">${item.mfi.agreement_expire_date ? UI.formatDate(item.mfi.agreement_expire_date) : (item.agreement && item.agreement.agreement_expire_date ? UI.formatDate(item.agreement.agreement_expire_date) : 'Not Set')}</strong></td>
                   <td>${item.agreement ? UI.formatCurrency(item.agreement.license_fee_per_branch) : '—'}</td>
                   <td>${item.agreement ? UI.formatCurrency(item.agreement.om_fee_per_branch) : '—'}</td>
                   <td><span class="badge badge-inactive">Renewal Overdue</span></td>
@@ -4638,6 +4691,7 @@ const ReportsView = {
               <tr>
                 <th>MFI</th>
                 <th>Effective Renewal Date</th>
+                <th>Agreement Expire Date</th>
                 <th>Days Remaining</th>
                 <th>License Fee</th>
                 <th>O&M Fee</th>
@@ -4646,11 +4700,12 @@ const ReportsView = {
               </tr>
             </thead>
             <tbody>
-              ${alerts.all_upcoming.length === 0 ? '<tr><td colspan="7" style="text-align:center; padding: 20px;">No upcoming renewals scheduled in advance.</td></tr>' : ''}
+              ${alerts.all_upcoming.length === 0 ? '<tr><td colspan="8" style="text-align:center; padding: 20px;">No upcoming renewals scheduled in advance.</td></tr>' : ''}
               ${alerts.all_upcoming.map(item => `
                 <tr>
                   <td><strong>${item.mfi.short_name} — ${item.mfi.full_name}</strong></td>
                   <td><strong>${UI.formatDate(item.agreement.agreement_date)}</strong></td>
+                  <td>${item.mfi.agreement_expire_date ? UI.formatDate(item.mfi.agreement_expire_date) : (item.agreement && item.agreement.agreement_expire_date ? UI.formatDate(item.agreement.agreement_expire_date) : 'Not Set')}</td>
                   <td><span class="badge badge-upcoming">In ${item.days_until_effective} Days</span></td>
                   <td>${UI.formatCurrency(item.agreement.license_fee_per_branch)}</td>
                   <td>${UI.formatCurrency(item.agreement.om_fee_per_branch)}</td>
