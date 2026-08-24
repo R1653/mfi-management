@@ -133,25 +133,54 @@ app.get('*', requireAuth, (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
+const fs = require('fs');
+const db = require('./src/config/database');
+
+// Auto-migrate & Auto-seed database on startup
+async function initDatabase() {
+  try {
+    const dbDir = path.join(__dirname, 'database');
+    if (!fs.existsSync(dbDir)) {
+      fs.mkdirSync(dbDir, { recursive: true });
+    }
+    console.log('[Database] Running automatic migrations...');
+    await db.migrate.latest();
+    console.log('[Database] Migrations complete.');
+
+    const hasUsersTable = await db.schema.hasTable('users');
+    if (hasUsersTable) {
+      const userCount = await db('users').count('id as count').first();
+      if (!userCount || userCount.count == 0) {
+        console.log('[Database] Seeding initial data...');
+        await db.seed.run();
+        console.log('[Database] Seeding complete.');
+      }
+    }
+  } catch (err) {
+    console.error('[Database Init Error]', err);
+  }
+}
+
 // Global Error Handler
 app.use((err, req, res, next) => {
   console.error('[Unhandled Global Error]', err);
-  if (req.xhr || req.path.startsWith('/api/')) {
+  if (req.xhr || (req.originalUrl && req.originalUrl.startsWith('/api/'))) {
     return res.status(500).json({
       success: false,
-      message: 'An unexpected internal server error occurred.'
+      message: err.message || 'An unexpected internal server error occurred.'
     });
   }
   res.status(500).send('An unexpected server error occurred.');
 });
 
 if (process.env.NODE_ENV !== 'test') {
-  app.listen(PORT, () => {
+  app.listen(PORT, async () => {
     console.log(`====================================================`);
     console.log(`  MFI Management & Agreement Management System      `);
     console.log(`  Server running at: http://localhost:${PORT}        `);
     console.log(`  Environment: ${process.env.NODE_ENV || 'development'} `);
     console.log(`====================================================`);
+    await initDatabase();
   });
 }
 
