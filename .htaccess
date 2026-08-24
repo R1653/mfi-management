@@ -1,12 +1,15 @@
 # Hostinger Webserver & Node.js Application Configuration
+Options +FollowSymLinks -Indexes
+DirectoryIndex public/login.html app.js
+
 <IfModule mod_passenger.c>
   PassengerEngine on
   PassengerAppType node
   PassengerStartupFile app.js
 </IfModule>
 
-# Block access to app.js, server.js and sensitive configuration files
-<FilesMatch "^(app\.js|server\.js|\.env|\.gitignore|package\.json|package-lock\.json|knexfile\.js)$">
+# Block access to sensitive configuration files
+<FilesMatch "^(\.env|\.gitignore|package\.json|package-lock\.json|knexfile\.js)$">
     <IfModule mod_authz_core.c>
         Require all denied
     </IfModule>
@@ -20,11 +23,14 @@
   RewriteEngine On
   RewriteBase /
 
-  # Serve existing physical files directly from public directory
+  # 1. Serve static assets directly from public folder if present
+  RewriteCond %{REQUEST_URI} ^/(css|js|images|assets)/ [NC]
+  RewriteRule ^(.*)$ public/$1 [L]
+
   RewriteCond %{DOCUMENT_ROOT}/public/$1 -f
   RewriteRule ^(.*)$ public/$1 [L]
 
-  # Fallback non-file requests to app.js
+  # 2. Pass all SPA route paths (/dashboard, /mfi, /teams, /branches, etc.) to app.js
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d
   RewriteRule ^(.*)$ app.js [QSA,L]
