@@ -1,29 +1,27 @@
-# Hostinger Node.js & Proxy Configuration
+# Permanent Hostinger Webserver & SPA Configuration
 DirectoryIndex public/index.html index.html
 
-# Prevent server source files from being served as plain text
+# Strictly block direct browser access to server.js and config files
 <FilesMatch "^(server\.js|\.env|\.gitignore|package\.json|package-lock\.json)$">
     Order allow,deny
     Deny from all
 </FilesMatch>
 
-# Preserve Domain Host and Session Cookies across Proxy
-<IfModule mod_proxy.c>
-  ProxyPreserveHost On
-  ProxyPassReverse / http://127.0.0.1:3000/
-  ProxyPassReverseCookiePath / /
-</IfModule>
-
 <IfModule mod_rewrite.c>
   RewriteEngine On
   RewriteBase /
 
-  # Serve existing physical files directly from public directory
-  RewriteCond %{DOCUMENT_ROOT}/public/$1 -f
-  RewriteRule ^(css|js|images|assets|uploads)/(.*)$ public/$1/$2 [L]
+  # Proxy API calls to Node.js backend running on port 3000
+  RewriteRule ^api/(.*)$ http://127.0.0.1:3000/api/$1 [P,QSA,L]
 
-  # Route all application pages and API endpoints to Node.js on port 3000
-  RewriteRule ^(.*)$ http://127.0.0.1:3000/$1 [P,QSA,L]
+  # Serve physical files directly from public directory
+  RewriteCond %{DOCUMENT_ROOT}/public/$1 -f
+  RewriteRule ^(.*)$ public/$1 [L]
+
+  # Route all SPA frontend pages (/login, /dashboard, /mfi, etc.) to public/index.html
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule ^(.*)$ public/index.html [L]
 </IfModule>
 
 
