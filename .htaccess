@@ -1,21 +1,15 @@
-# Hostinger Node.js & SPA Frontend Configuration
-DirectoryIndex public/index.html index.html
-
+# Hostinger Node.js Reverse Proxy Configuration
 <IfModule mod_rewrite.c>
   RewriteEngine On
   RewriteBase /
 
-  # Proxy API endpoints to local Node.js application running on port 3000
-  RewriteRule ^api/(.*)$ http://127.0.0.1:3000/api/$1 [P,L]
-
-  # Serve existing physical files directly from public directory
+  # Serve static asset files directly via Apache
   RewriteCond %{DOCUMENT_ROOT}/public/$1 -f
-  RewriteRule ^(.*)$ public/$1 [L]
+  RewriteRule ^(css|js|images|assets|uploads)/(.*)$ public/$1/$2 [L]
 
-  # Fallback all SPA routes (/login, /mfi, /dashboard, etc.) to public/index.html
-  RewriteCond %{REQUEST_FILENAME} !-f
-  RewriteCond %{REQUEST_FILENAME} !-d
-  RewriteRule ^(.*)$ public/index.html [L]
+  # Route all application pages and API endpoints to Node.js on port 3000
+  RewriteRule ^(.*)$ http://127.0.0.1:3000/$1 [P,QSA,L]
 </IfModule>
+
 
 

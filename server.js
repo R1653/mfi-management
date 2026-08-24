@@ -22,6 +22,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Security & Parsing Middleware
+app.set('trust proxy', 1);
 app.use(cors());
 app.use(morgan('dev'));
 app.use(express.json());
