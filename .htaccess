@@ -8,8 +8,8 @@ DirectoryIndex public/login.html app.js
   PassengerStartupFile app.js
 </IfModule>
 
-# Block access to sensitive configuration files
-<FilesMatch "^(\.env|\.gitignore|package\.json|package-lock\.json|knexfile\.js)$">
+# Block direct static file download of app.js, server.js and sensitive configuration files
+<FilesMatch "^(app\.js|server\.js|\.env|\.gitignore|package\.json|package-lock\.json|knexfile\.js)$">
     <IfModule mod_authz_core.c>
         Require all denied
     </IfModule>
@@ -30,7 +30,7 @@ DirectoryIndex public/login.html app.js
   RewriteCond %{DOCUMENT_ROOT}/public/$1 -f
   RewriteRule ^(.*)$ public/$1 [L]
 
-  # 2. Pass all SPA route paths (/dashboard, /mfi, /teams, /branches, etc.) to app.js
+  # 2. Pass all SPA route paths (/dashboard, /mfi, /teams, /branches, etc.) to app.js execution engine
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d
   RewriteRule ^(.*)$ app.js [QSA,L]

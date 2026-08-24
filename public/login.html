@@ -550,7 +550,13 @@
           body: JSON.stringify({ login_id, password })
         });
 
-        const data = await res.json();
+        let data;
+        const contentType = res.headers.get('content-type') || '';
+        if (contentType.includes('application/json')) {
+          data = await res.json();
+        } else {
+          throw new Error('Hostinger Node.js app is stopped or restarting. Please click Start in Hostinger hPanel -> Node.js.');
+        }
 
         if (!res.ok || !data.success) {
           throw new Error(data.message || 'Login failed. Please check your credentials.');
@@ -564,6 +570,7 @@
         submitBtn.disabled = false;
         btnSpinner.style.display = 'none';
         btnText.textContent = 'Sign In';
+        console.error('Login error:', err);
       }
     });
   </script>
