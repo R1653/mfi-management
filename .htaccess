@@ -6,8 +6,8 @@ DirectoryIndex index.html public/index.html
   PassengerEngine off
 </IfModule>
 
-# Block access to server.js and sensitive configuration files
-<FilesMatch "^(server\.js|\.env|\.gitignore|package\.json|package-lock\.json)$">
+# Block access to app.js, server.js and sensitive configuration files
+<FilesMatch "^(app\.js|server\.js|\.env|\.gitignore|package\.json|package-lock\.json)$">
     <IfModule mod_authz_core.c>
         Require all denied
     </IfModule>
