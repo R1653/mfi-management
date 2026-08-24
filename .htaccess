@@ -1,10 +1,16 @@
-# Hostinger Node.js Webserver Configuration
-DirectoryIndex index.html
+# Hostinger Node.js Reverse Proxy Configuration
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  
+  # Serve existing static files from public directory
+  RewriteCond %{DOCUMENT_ROOT}/public%{REQUEST_URI} -f
+  RewriteRule ^(.+)$ public/$1 [L]
 
-# Prevent displaying server source files in browser
-<FilesMatch "\.(js|json|sqlite3|env|log)$">
-    # Allow static JS in public folder but deny server root script execution as plain text
-</FilesMatch>
+  # Proxy all web requests to Node.js backend running on port 3000
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule ^(.*)$ http://127.0.0.1:3000/$1 [P,L]
+</IfModule>
 
 <IfModule mod_passenger.c>
   PassengerEngine on
