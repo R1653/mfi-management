@@ -94,6 +94,43 @@ class AgreementService {
   }
 
   /**
+   * Batch resolve applicable agreements for multiple MFIs in a single query
+   * @param {Array<number>} mfiIds 
+   * @param {string|Date} [targetDate=null] 
+   * @returns {Promise<Map<number, Object>>}
+   */
+  static async getApplicableAgreementsForMfis(mfiIds = [], targetDate = null) {
+    if (!mfiIds || mfiIds.length === 0) return new Map();
+
+    const formattedDate = targetDate 
+      ? dayjs(targetDate).format('YYYY-MM-DD')
+      : dayjs().format('YYYY-MM-DD');
+
+    const agreements = await db('mfi_agreements')
+      .join('mfi', 'mfi_agreements.mfi_id', 'mfi.id')
+      .whereIn('mfi_agreements.mfi_id', mfiIds)
+      .andWhere('mfi_agreements.agreement_date', '<=', formattedDate)
+      .select('mfi_agreements.*', 'mfi.agreement_expire_date as mfi_expire_date')
+      .orderBy('mfi_agreements.agreement_date', 'desc')
+      .orderBy('mfi_agreements.id', 'desc');
+
+    const map = new Map();
+    for (const agr of agreements) {
+      if (!map.has(agr.mfi_id)) {
+        const rawExpire = agr.agreement_expire_date || agr.mfi_expire_date || null;
+        map.set(agr.mfi_id, {
+          ...agr,
+          license_fee_per_branch: parseFloat(agr.license_fee_per_branch),
+          om_fee_per_branch: parseFloat(agr.om_fee_per_branch),
+          effective_date: agr.agreement_date,
+          agreement_expire_date: rawExpire ? dayjs(rawExpire).format('YYYY-MM-DD') : null
+        });
+      }
+    }
+    return map;
+  }
+
+  /**
    * Get upcoming and expiring agreement alerts for Dashboard & Reports
    * 
    * @param {Object} options
@@ -116,10 +153,26 @@ class AgreementService {
       all_upcoming: []
     };
 
+    if (activeMfis.length === 0) return alerts;
+
+    const mfiIds = activeMfis.map(m => m.id);
+
+    // Fetch all agreements for active MFIs in 1 batch query
+    const allAgreements = await db('mfi_agreements')
+      .whereIn('mfi_id', mfiIds)
+      .orderBy('agreement_date', 'desc');
+
+    // Group agreements by mfi_id in memory
+    const agreementMap = new Map();
+    for (const agr of allAgreements) {
+      if (!agreementMap.has(agr.mfi_id)) {
+        agreementMap.set(agr.mfi_id, []);
+      }
+      agreementMap.get(agr.mfi_id).push(agr);
+    }
+
     for (const mfi of activeMfis) {
-      const agreements = await db('mfi_agreements')
-        .where('mfi_id', mfi.id)
-        .orderBy('agreement_date', 'desc');
+      const agreements = agreementMap.get(mfi.id) || [];
 
       const latestPast = agreements.find(a => a.agreement_date <= today) || agreements[0];
       const expireDateRaw = (latestPast && latestPast.agreement_expire_date) || mfi.agreement_expire_date;

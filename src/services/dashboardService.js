@@ -55,22 +55,24 @@ class DashboardService {
       )
       .orderBy('branch_count', 'desc');
 
-    // 5. Current Fees per MFI (using AgreementService getApplicableAgreement for each MFI!)
+    // 5. Current Fees per MFI (using AgreementService batch helper)
     const activeMfis = await db('mfi')
       .whereNull('deleted_at')
       .select('id', 'short_name', 'full_name', 'status');
 
-    const mfiFeesList = [];
-    for (const mfi of activeMfis) {
-      const applicable = await AgreementService.getApplicableAgreement(mfi.id, today);
-      mfiFeesList.push({
+    const activeMfiIds = activeMfis.map(m => m.id);
+    const applicableMap = await AgreementService.getApplicableAgreementsForMfis(activeMfiIds, today);
+
+    const mfiFeesList = activeMfis.map(mfi => {
+      const applicable = applicableMap.get(mfi.id);
+      return {
         id: mfi.id,
         short_name: mfi.short_name,
         full_name: mfi.full_name,
         license_fee: applicable ? applicable.license_fee_per_branch : 0,
         om_fee: applicable ? applicable.om_fee_per_branch : 0
-      });
-    }
+      };
+    });
 
     // 6. Agreement Renewal Trend by Year
     const agreementTrend = await db('mfi_agreements')

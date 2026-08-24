@@ -1,5 +1,5 @@
 const request = require('supertest');
-const app = require('../server');
+const app = require('../app');
 const db = require('../src/config/database');
 
 describe('Full API Integration Tests (Auth, RBAC, MFI, Branches, Audit)', () => {
@@ -16,6 +16,7 @@ describe('Full API Integration Tests (Auth, RBAC, MFI, Branches, Audit)', () => 
       await db('mfi_agreements').where('mfi_id', createdMfiId).del();
       await db('mfi').where('id', createdMfiId).del();
     }
+    await db.destroy();
   });
 
   test('POST /api/auth/login - Should fail with invalid credentials', async () => {

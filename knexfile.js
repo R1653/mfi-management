@@ -16,7 +16,13 @@ module.exports = {
     },
     pool: {
       afterCreate: (conn, cb) => {
-        conn.run('PRAGMA foreign_keys = ON', cb);
+        conn.run('PRAGMA foreign_keys = ON;', (err) => {
+          if (err) return cb(err, conn);
+          conn.run('PRAGMA journal_mode = WAL;', (err) => {
+            if (err) return cb(err, conn);
+            conn.run('PRAGMA synchronous = NORMAL;', (err) => cb(err, conn));
+          });
+        });
       }
     }
   },
@@ -34,7 +40,13 @@ module.exports = {
     },
     pool: {
       afterCreate: (conn, cb) => {
-        conn.run('PRAGMA foreign_keys = ON', cb);
+        conn.run('PRAGMA foreign_keys = ON;', (err) => {
+          if (err) return cb(err, conn);
+          conn.run('PRAGMA journal_mode = WAL;', (err) => {
+            if (err) return cb(err, conn);
+            conn.run('PRAGMA synchronous = NORMAL;', (err) => cb(err, conn));
+          });
+        });
       }
     }
   },

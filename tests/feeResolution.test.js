@@ -70,6 +70,7 @@ describe('Agreement & Fee Resolution Engine (Single Source of Truth)', () => {
       await db('mfi_agreements').where('mfi_id', testMfiId).del();
       await db('mfi').where('id', testMfiId).del();
     }
+    await db.destroy();
   });
 
   test('Should resolve 2020 rates for invoice date in 2021 (before second renewal)', async () => {

@@ -178,14 +178,27 @@ router.get('/', requireAuth, requirePermission('mfi.view'), async (req, res) => 
     const result = await paginate(query, { page, limit });
     const today = dayjs().format('YYYY-MM-DD');
 
+    const pageMfiIds = result.data.map(m => m.id);
+
+    // 1. Batch fetch branch counts for all page MFIs in 1 query
+    const branchCounts = pageMfiIds.length > 0
+      ? await db('branches')
+          .whereIn('mfi_id', pageMfiIds)
+          .whereNull('deleted_at')
+          .groupBy('mfi_id')
+          .select('mfi_id', db.raw('COUNT(id) as count'))
+      : [];
+
+    const branchCountMap = new Map();
+    branchCounts.forEach(bc => branchCountMap.set(bc.mfi_id, parseInt(bc.count, 10)));
+
+    // 2. Batch fetch applicable agreements for all page MFIs in 1 query
+    const applicableMap = await AgreementService.getApplicableAgreementsForMfis(pageMfiIds, today);
+
     // Enrich each MFI record with current applicable fee and live branch counts
-    const enrichedData = await Promise.all(result.data.map(async (mfi, index) => {
-      const applicableAgreement = await AgreementService.getApplicableAgreement(mfi.id, today);
-      const branchCountRow = await db('branches')
-        .where('mfi_id', mfi.id)
-        .whereNull('deleted_at')
-        .count('id as count')
-        .first();
+    const enrichedData = result.data.map((mfi, index) => {
+      const applicableAgreement = applicableMap.get(mfi.id);
+      const totalBranches = branchCountMap.get(mfi.id) || 0;
 
       return {
         ...mfi,
@@ -194,9 +207,9 @@ router.get('/', requireAuth, requirePermission('mfi.view'), async (req, res) => 
         current_om_fee: applicableAgreement ? applicableAgreement.om_fee_per_branch : parseFloat(mfi.initial_om_fee),
         current_fee_effective_date: applicableAgreement ? applicableAgreement.agreement_date : mfi.initial_agreement_date,
         agreement_expire_date: mfi.agreement_expire_date ? dayjs(mfi.agreement_expire_date).format('YYYY-MM-DD') : (applicableAgreement ? applicableAgreement.agreement_expire_date : null),
-        total_branches: parseInt(branchCountRow?.count || 0, 10)
+        total_branches: totalBranches
       };
-    }));
+    });
 
     res.json({
       success: true,
@@ -654,6 +667,16 @@ router.put('/:id', requireAuth, requirePermission('mfi.update'), async (req, res
       }
     }
 
+    // Grace period for O&M: allow 0, positive, or negative integers; null clears the field
+    if (om_grace_period_months !== undefined) {
+      if (om_grace_period_months === null || om_grace_period_months === '') {
+        updatePayload.om_grace_period_months = null;
+      } else {
+        const parsed = parseInt(om_grace_period_months, 10);
+        if (!isNaN(parsed)) updatePayload.om_grace_period_months = parsed;
+      }
+    }
+
     if (is_head_office_billable !== undefined) {
       const isHeadOfficeBillable = (
         is_head_office_billable === true ||
@@ -704,16 +727,6 @@ router.put('/:id', requireAuth, requirePermission('mfi.update'), async (req, res
 
     if (status && ['active', 'inactive'].includes(status)) {
       updatePayload.status = status;
-    }
-
-    // Grace period for O&M: allow 0, positive, or negative integers; null clears the field
-    if (om_grace_period_months !== undefined) {
-      if (om_grace_period_months === null || om_grace_period_months === '') {
-        updatePayload.om_grace_period_months = null;
-      } else {
-        const parsed = parseInt(om_grace_period_months, 10);
-        if (!isNaN(parsed)) updatePayload.om_grace_period_months = parsed;
-      }
     }
 
     await db('mfi').where('id', id).update(updatePayload);

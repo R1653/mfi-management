@@ -32,12 +32,13 @@ app.use(express.urlencoded({ extended: true }));
 app.use(
   session({
     secret: process.env.SESSION_SECRET || 'mfi_enterprise_secret_key_2026_secure',
-    resave: false,
+    resave: true,
     saveUninitialized: false,
     cookie: {
       secure: false, // Set to true if HTTPS in production
       maxAge: 24 * 60 * 60 * 1000, // 24 hours
-      httpOnly: true
+      httpOnly: true,
+      sameSite: 'lax'
     }
   })
 );
