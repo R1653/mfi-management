@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Sign In — MFI Management</title>
+  <title>Sign In — MFI Management & Agreement Portal</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏦</text></svg>">
   <style>
     *, *::before, *::after {
@@ -16,15 +16,14 @@
     }
 
     :root {
-      --primary: #2563eb;
-      --primary-hover: #1d4ed8;
-      --primary-glow: rgba(37, 99, 235, 0.45);
+      --primary: #3b82f6;
+      --primary-hover: #2563eb;
+      --primary-glow: rgba(59, 130, 246, 0.4);
       --accent-cyan: #06b6d4;
-      --accent-indigo: #6366f1;
-      --bg-dark: #090d16;
-      --card-bg: rgba(15, 23, 42, 0.75);
-      --card-border: rgba(255, 255, 255, 0.08);
-      --card-border-focus: rgba(99, 102, 241, 0.4);
+      --accent-purple: #8b5cf6;
+      --bg-dark: #070913;
+      --card-bg: rgba(13, 19, 36, 0.75);
+      --card-border: rgba(255, 255, 255, 0.1);
       --input-bg: rgba(255, 255, 255, 0.04);
       --input-border: rgba(255, 255, 255, 0.12);
       --text-main: #f8fafc;
@@ -47,7 +46,15 @@
       padding: 24px 16px;
     }
 
-    /* Dynamic Animated Background Mesh & Orbs */
+    /* Interactive Spotlight Background Canvas */
+    #spotlight-canvas {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    /* Background Mesh & Floating Orbs */
     .bg-mesh {
       position: fixed;
       inset: 0;
@@ -62,69 +69,83 @@
       background-image: 
         linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
         linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
-      background-size: 40px 40px;
-      mask-image: radial-gradient(circle at center, black 40%, transparent 85%);
-      -webkit-mask-image: radial-gradient(circle at center, black 40%, transparent 85%);
+      background-size: 44px 44px;
+      mask-image: radial-gradient(circle at center, black 40%, transparent 90%);
+      -webkit-mask-image: radial-gradient(circle at center, black 40%, transparent 90%);
     }
 
     .orb {
       position: absolute;
       border-radius: 50%;
-      filter: blur(80px);
-      opacity: 0.55;
-      animation: floatOrb 16s ease-in-out infinite alternate;
+      filter: blur(90px);
+      opacity: 0.5;
+      animation: floatOrb 18s ease-in-out infinite alternate;
     }
 
     .orb-1 {
-      width: 480px;
-      height: 480px;
+      width: 520px;
+      height: 520px;
       background: radial-gradient(circle, #2563eb, #1e1b4b);
-      top: -100px;
-      left: -80px;
-      animation-duration: 18s;
+      top: -120px;
+      left: -100px;
+      animation-duration: 20s;
     }
 
     .orb-2 {
-      width: 420px;
-      height: 420px;
+      width: 460px;
+      height: 460px;
       background: radial-gradient(circle, #06b6d4, #0f766e);
-      bottom: -100px;
-      right: -60px;
-      animation-duration: 14s;
-      animation-delay: -4s;
+      bottom: -120px;
+      right: -80px;
+      animation-duration: 16s;
+      animation-delay: -5s;
     }
 
     .orb-3 {
-      width: 320px;
-      height: 320px;
+      width: 360px;
+      height: 360px;
       background: radial-gradient(circle, #7c3aed, #4338ca);
-      top: 45%;
-      left: 55%;
+      top: 50%;
+      left: 50%;
       transform: translate(-50%, -50%);
-      animation-duration: 22s;
-      animation-delay: -8s;
-      opacity: 0.35;
+      animation-duration: 24s;
+      animation-delay: -10s;
+      opacity: 0.3;
     }
 
     @keyframes floatOrb {
       0% { transform: translate(0, 0) scale(1); }
-      50% { transform: translate(40px, -30px) scale(1.08); }
-      100% { transform: translate(-30px, 40px) scale(0.95); }
+      50% { transform: translate(50px, -40px) scale(1.1); }
+      100% { transform: translate(-40px, 50px) scale(0.92); }
     }
 
-    /* Main Container */
-    .login-container {
+    /* Outer Wrapper for Split Desktop Layout */
+    .portal-wrapper {
       position: relative;
       z-index: 10;
       width: 100%;
-      max-width: 440px;
-      animation: fadeInUp 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+      max-width: 1060px;
+      display: grid;
+      grid-template-columns: 1.1fr 1fr;
+      gap: 32px;
+      align-items: center;
+      animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    @media (max-width: 900px) {
+      .portal-wrapper {
+        grid-template-columns: 1fr;
+        max-width: 460px;
+      }
+      .brand-hero-section {
+        display: none !important;
+      }
     }
 
     @keyframes fadeInUp {
       from {
         opacity: 0;
-        transform: translateY(24px) scale(0.98);
+        transform: translateY(30px) scale(0.97);
       }
       to {
         opacity: 1;
@@ -132,54 +153,182 @@
       }
     }
 
-    /* Glassmorphism Card */
-    .login-card {
-      background: var(--card-bg);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-      border: 1px solid var(--card-border);
-      border-radius: 20px;
-      padding: 38px 34px;
-      box-shadow: 
-        0 25px 50px -12px rgba(0, 0, 0, 0.65),
-        0 0 0 1px rgba(255, 255, 255, 0.05),
-        inset 0 1px 1px rgba(255, 255, 255, 0.1);
-      position: relative;
-      overflow: hidden;
+    /* Left Brand Showcase Section */
+    .brand-hero-section {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 24px;
     }
 
-    /* Subtle top accent highlight bar */
+    .system-status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      background: rgba(16, 185, 129, 0.12);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      border-radius: 30px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #34d399;
+      width: fit-content;
+      margin-bottom: 24px;
+      backdrop-filter: blur(10px);
+    }
+
+    .pulse-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background-color: #10b981;
+      box-shadow: 0 0 10px #10b981;
+      animation: pulseGlow 2s infinite;
+    }
+
+    @keyframes pulseGlow {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(1.3); }
+    }
+
+    .hero-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 42px;
+      font-weight: 800;
+      line-height: 1.15;
+      letter-spacing: -0.02em;
+      margin-bottom: 16px;
+      background: linear-gradient(135deg, #ffffff 30%, #94a3b8 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .hero-title span {
+      background: linear-gradient(135deg, #60a5fa 0%, #38bdf8 50%, #818cf8 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .hero-subtitle {
+      font-size: 15px;
+      line-height: 1.6;
+      color: #94a3b8;
+      margin-bottom: 32px;
+      max-width: 440px;
+    }
+
+    /* Live Features Grid Cards */
+    .features-list {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .feature-card {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 14px 18px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      border-radius: 14px;
+      backdrop-filter: blur(10px);
+      transition: all 0.3s ease;
+    }
+
+    .feature-card:hover {
+      background: rgba(255, 255, 255, 0.06);
+      border-color: rgba(59, 130, 246, 0.3);
+      transform: translateX(6px);
+    }
+
+    .feature-icon-box {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, rgba(37, 99, 235, 0.2), rgba(6, 182, 212, 0.2));
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #60a5fa;
+      flex-shrink: 0;
+    }
+
+    .feature-text-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: #f1f5f9;
+      margin-bottom: 2px;
+    }
+
+    .feature-text-desc {
+      font-size: 12px;
+      color: #64748b;
+    }
+
+    /* Right Glassmorphism Card Container */
+    .login-container {
+      position: relative;
+      width: 100%;
+    }
+
+    .login-card {
+      background: var(--card-bg);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border: 1px solid var(--card-border);
+      border-radius: 24px;
+      padding: 42px 36px;
+      box-shadow: 
+        0 30px 60px -12px rgba(0, 0, 0, 0.7),
+        0 0 0 1px rgba(255, 255, 255, 0.05),
+        inset 0 1px 1px rgba(255, 255, 255, 0.15);
+      position: relative;
+      overflow: hidden;
+      transition: border-color 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .login-card:hover {
+      border-color: rgba(99, 102, 241, 0.3);
+      box-shadow: 
+        0 35px 70px -15px rgba(0, 0, 0, 0.8),
+        0 0 30px rgba(59, 130, 246, 0.15);
+    }
+
+    /* Top Accent Line */
     .login-card::before {
       content: '';
       position: absolute;
       top: 0;
-      left: 15%;
-      right: 15%;
-      height: 2px;
-      background: linear-gradient(90deg, transparent, #38bdf8, #818cf8, transparent);
-      opacity: 0.8;
+      left: 10%;
+      right: 10%;
+      height: 3px;
+      background: linear-gradient(90deg, transparent, #38bdf8, #818cf8, #c084fc, transparent);
+      border-radius: 0 0 4px 4px;
     }
 
-    /* Brand Header */
+    /* Card Brand Header */
     .brand-header {
       display: flex;
       align-items: center;
       gap: 14px;
-      margin-bottom: 28px;
+      margin-bottom: 24px;
     }
 
     .brand-logo-badge {
-      width: 44px;
-      height: 44px;
-      border-radius: 12px;
+      width: 48px;
+      height: 48px;
+      border-radius: 14px;
       background: linear-gradient(135deg, #2563eb, #06b6d4);
       display: flex;
       align-items: center;
       justify-content: center;
       color: #ffffff;
+      font-family: 'Outfit', sans-serif;
       font-weight: 800;
-      font-size: 20px;
-      box-shadow: 0 4px 16px rgba(37, 99, 235, 0.4);
+      font-size: 22px;
+      box-shadow: 0 6px 20px rgba(37, 99, 235, 0.45);
       position: relative;
     }
 
@@ -187,26 +336,30 @@
       content: '';
       position: absolute;
       inset: 0;
-      border-radius: 12px;
-      border: 1px solid rgba(255, 255, 255, 0.3);
+      border-radius: 14px;
+      border: 1px solid rgba(255, 255, 255, 0.35);
     }
 
     .brand-title {
+      font-family: 'Outfit', sans-serif;
       font-size: 22px;
       font-weight: 800;
       color: #ffffff;
-      letter-spacing: -0.02em;
-      line-height: 1.1;
-      background: linear-gradient(135deg, #ffffff 40%, #cbd5e1 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
+      letter-spacing: -0.01em;
+      line-height: 1.15;
+    }
+
+    .brand-subtitle {
+      font-size: 12px;
+      color: var(--text-muted);
+      font-weight: 500;
     }
 
     .login-heading {
       font-size: 18px;
       font-weight: 700;
       color: #f1f5f9;
-      margin-bottom: 22px;
+      margin-bottom: 24px;
       letter-spacing: -0.01em;
     }
 
@@ -243,22 +396,22 @@
       height: 18px;
       color: var(--text-muted);
       pointer-events: none;
-      transition: color 0.2s ease;
+      transition: color 0.25s ease;
     }
 
     .form-input {
       width: 100%;
-      height: 46px;
-      padding: 0 14px 0 42px;
+      height: 48px;
+      padding: 0 14px 0 44px;
       font-family: inherit;
       font-size: 14px;
       font-weight: 500;
       color: #ffffff;
       background: var(--input-bg);
       border: 1px solid var(--input-border);
-      border-radius: 10px;
+      border-radius: 12px;
       outline: none;
-      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
     .form-input::placeholder {
@@ -266,9 +419,9 @@
     }
 
     .form-input:focus {
-      background: rgba(255, 255, 255, 0.07);
+      background: rgba(255, 255, 255, 0.08);
       border-color: #3b82f6;
-      box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.2), 0 4px 12px rgba(0, 0, 0, 0.3);
+      box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.25), 0 4px 14px rgba(0, 0, 0, 0.4);
     }
 
     .input-wrapper:focus-within .input-icon {
@@ -287,17 +440,17 @@
       align-items: center;
       justify-content: center;
       padding: 6px;
-      border-radius: 6px;
+      border-radius: 8px;
       transition: color 0.2s ease, background-color 0.2s ease;
     }
 
     .password-toggle-btn:hover {
-      color: #e2e8f0;
-      background: rgba(255, 255, 255, 0.06);
+      color: #f1f5f9;
+      background: rgba(255, 255, 255, 0.08);
     }
 
     .password-input {
-      padding-right: 42px;
+      padding-right: 44px;
     }
 
     /* Error Alert Box */
@@ -308,7 +461,7 @@
       border-left: 4px solid var(--danger);
       color: #fca5a5;
       padding: 12px 14px;
-      border-radius: 8px;
+      border-radius: 10px;
       font-size: 13px;
       margin-bottom: 20px;
       line-height: 1.4;
@@ -317,22 +470,61 @@
 
     @keyframes shake {
       0%, 100% { transform: translateX(0); }
-      20%, 60% { transform: translateX(-5px); }
-      40%, 80% { transform: translateX(5px); }
+      20%, 60% { transform: translateX(-6px); }
+      40%, 80% { transform: translateX(6px); }
+    }
+
+    /* Quick Fill Credentials Pills */
+    .demo-pills-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 8px;
+    }
+
+    .demo-pills-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+
+    .demo-pill {
+      padding: 6px 12px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #94a3b8;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s ease;
+    }
+
+    .demo-pill:hover {
+      background: rgba(59, 130, 246, 0.15);
+      border-color: rgba(59, 130, 246, 0.4);
+      color: #60a5fa;
+      transform: translateY(-1px);
     }
 
     /* Submit Button */
     .submit-btn {
       width: 100%;
-      height: 48px;
-      margin-top: 10px;
+      height: 50px;
+      margin-top: 8px;
       border: none;
-      border-radius: 10px;
-      background: linear-gradient(135deg, #2563eb, #1d4ed8);
+      border-radius: 12px;
+      background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
       color: #ffffff;
       font-family: inherit;
       font-size: 15px;
-      font-weight: 600;
+      font-weight: 700;
       cursor: pointer;
       display: flex;
       align-items: center;
@@ -340,7 +532,7 @@
       gap: 10px;
       position: relative;
       overflow: hidden;
-      box-shadow: 0 4px 14px rgba(37, 99, 235, 0.4);
+      box-shadow: 0 4px 18px rgba(37, 99, 235, 0.45);
       transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
@@ -348,15 +540,15 @@
       content: '';
       position: absolute;
       inset: 0;
-      background: linear-gradient(135deg, rgba(255, 255, 255, 0.15), transparent);
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.2), transparent);
       opacity: 0;
       transition: opacity 0.2s ease;
     }
 
     .submit-btn:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 6px 20px rgba(37, 99, 235, 0.55);
-      background: linear-gradient(135deg, #3b82f6, #2563eb);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px rgba(37, 99, 235, 0.6);
+      background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
     }
 
     .submit-btn:hover::before {
@@ -365,11 +557,11 @@
 
     .submit-btn:active {
       transform: translateY(0);
-      box-shadow: 0 2px 8px rgba(37, 99, 235, 0.4);
+      box-shadow: 0 3px 10px rgba(37, 99, 235, 0.4);
     }
 
     .submit-btn:disabled {
-      opacity: 0.7;
+      opacity: 0.75;
       cursor: not-allowed;
       transform: none !important;
     }
@@ -379,7 +571,7 @@
       display: none;
       width: 18px;
       height: 18px;
-      border: 2px solid rgba(255, 255, 255, 0.3);
+      border: 2px solid rgba(255, 255, 255, 0.35);
       border-top-color: #ffffff;
       border-radius: 50%;
       animation: spin 0.7s linear infinite;
@@ -389,28 +581,31 @@
       to { transform: rotate(360deg); }
     }
 
-    /* Card Footer & Security Badge */
+    /* Security Badge Footer */
     .footer-note {
       margin-top: 24px;
       display: flex;
       align-items: center;
       justify-content: center;
       gap: 6px;
-      font-size: 11px;
+      font-size: 12px;
       color: #64748b;
-      letter-spacing: 0.02em;
+      letter-spacing: 0.01em;
     }
 
     .footer-note svg {
-      width: 13px;
-      height: 13px;
+      width: 14px;
+      height: 14px;
       color: #10b981;
     }
   </style>
 </head>
 <body>
 
-  <!-- Dynamic Animated Background Mesh -->
+  <!-- Interactive Canvas Spotlight Track -->
+  <canvas id="spotlight-canvas"></canvas>
+
+  <!-- Dynamic Background Mesh & Floating Orbs -->
   <div class="bg-mesh">
     <div class="bg-grid"></div>
     <div class="orb orb-1"></div>
@@ -418,91 +613,192 @@
     <div class="orb orb-3"></div>
   </div>
 
-  <!-- Login Card Container -->
-  <div class="login-container">
-    <div class="login-card">
+  <!-- Main Portal Layout -->
+  <div class="portal-wrapper">
+    
+    <!-- Left Hero & Live System Feature Banner -->
+    <div class="brand-hero-section">
+      <div class="system-status-badge">
+        <span class="pulse-dot"></span>
+        <span>System Operational — Enterprise Portal</span>
+      </div>
+
+      <h1 class="hero-title">
+        Next-Gen <span>Microfinance</span> & Agreement Hub
+      </h1>
       
-      <!-- Brand Logo & Title -->
-      <div class="brand-header">
-        <div class="brand-logo-badge">M</div>
-        <div class="brand-title">MFI Management</div>
-      </div>
+      <p class="hero-subtitle">
+        Streamlining multi-branch MFI operations, real-time fee calculations, agreement expirations, and secure audit logging.
+      </p>
 
-      <!-- Main Heading -->
-      <h1 class="login-heading">Sign In to Your Account</h1>
-
-      <!-- Error Alert Box -->
-      <div id="login-error" class="error-alert"></div>
-
-      <!-- Login Form -->
-      <form id="login-form">
-        <div class="form-group">
-          <label class="form-label" for="login_id">
-            <span>Login ID <span class="required-star">*</span></span>
-          </label>
-          <div class="input-wrapper">
-            <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-              <circle cx="12" cy="7" r="4"></circle>
-            </svg>
-            <input 
-              type="text" 
-              id="login_id" 
-              name="login_id" 
-              class="form-input" 
-              placeholder="Enter your login ID" 
-              required 
-              autofocus 
-              autocomplete="username"
-            >
+      <div class="features-list">
+        <div class="feature-card">
+          <div class="feature-icon-box">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18M3 7v14M21 7v14M6 11h2M6 15h2M11 11h2M11 15h2M16 11h2M16 15h2M2 7l10-4 10 4"/></svg>
+          </div>
+          <div>
+            <div class="feature-text-title">Multi-Branch Architecture</div>
+            <div class="feature-text-desc">Centralized tracking for MFIs, Branch offices, and Area offices.</div>
           </div>
         </div>
 
-        <div class="form-group">
-          <label class="form-label" for="password">
-            <span>Password <span class="required-star">*</span></span>
-          </label>
-          <div class="input-wrapper">
-            <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-              <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-            </svg>
-            <input 
-              type="password" 
-              id="password" 
-              name="password" 
-              class="form-input password-input" 
-              placeholder="Enter your password" 
-              required 
-              autocomplete="current-password"
-            >
-            <button type="button" id="password-toggle" class="password-toggle-btn" aria-label="Toggle password visibility">
-              <svg id="eye-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                <circle cx="12" cy="12" r="3"></circle>
-              </svg>
-            </button>
+        <div class="feature-card">
+          <div class="feature-icon-box">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+          </div>
+          <div>
+            <div class="feature-text-title">Automated O & M Fee Engine</div>
+            <div class="feature-text-desc">Precision billing date computations with grace periods.</div>
           </div>
         </div>
 
-        <button type="submit" id="submit-btn" class="submit-btn">
-          <span class="btn-spinner" id="btn-spinner"></span>
-          <span id="btn-text">Sign In</span>
-        </button>
-      </form>
-
-      <!-- Security Trust Footer -->
-      <div class="footer-note">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
-        </svg>
-        <span>Protected Enterprise Portal</span>
+        <div class="feature-card">
+          <div class="feature-icon-box">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          </div>
+          <div>
+            <div class="feature-text-title">Enterprise RBAC & Security</div>
+            <div class="feature-text-desc">Role-based access controls and detailed user audit trails.</div>
+          </div>
+        </div>
       </div>
-
     </div>
+
+    <!-- Right Interactive Glassmorphism Login Card -->
+    <div class="login-container">
+      <div class="login-card">
+        
+        <!-- Brand Header -->
+        <div class="brand-header">
+          <div class="brand-logo-badge">M</div>
+          <div>
+            <div class="brand-title">MFI Management</div>
+            <div class="brand-subtitle">Enterprise Administration Portal</div>
+          </div>
+        </div>
+
+        <!-- Login Heading -->
+        <h2 class="login-heading">Sign In to Your Account</h2>
+
+        <!-- Quick Credentials Autofill Chips -->
+        <div class="demo-pills-label">Quick Sign In Options</div>
+        <div class="demo-pills-container">
+          <div class="demo-pill" onclick="quickFill('admin', 'admin123')">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            <span>Super Admin</span>
+          </div>
+        </div>
+
+        <!-- Error Alert Box -->
+        <div id="login-error" class="error-alert"></div>
+
+        <!-- Login Form -->
+        <form id="login-form">
+          <div class="form-group">
+            <label class="form-label" for="login_id">
+              <span>Login ID <span class="required-star">*</span></span>
+            </label>
+            <div class="input-wrapper">
+              <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                <circle cx="12" cy="7" r="4"></circle>
+              </svg>
+              <input 
+                type="text" 
+                id="login_id" 
+                name="login_id" 
+                class="form-input" 
+                placeholder="Enter your login ID" 
+                required 
+                autofocus 
+                autocomplete="username"
+              >
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="password">
+              <span>Password <span class="required-star">*</span></span>
+            </label>
+            <div class="input-wrapper">
+              <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+              </svg>
+              <input 
+                type="password" 
+                id="password" 
+                name="password" 
+                class="form-input password-input" 
+                placeholder="Enter your password" 
+                required 
+                autocomplete="current-password"
+              >
+              <button type="button" id="password-toggle" class="password-toggle-btn" aria-label="Toggle password visibility">
+                <svg id="eye-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                  <circle cx="12" cy="12" r="3"></circle>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <button type="submit" id="submit-btn" class="submit-btn">
+            <span class="btn-spinner" id="btn-spinner"></span>
+            <span id="btn-text">Sign In to Dashboard</span>
+          </button>
+        </form>
+
+        <!-- Security Trust Footer -->
+        <div class="footer-note">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+          </svg>
+          <span>End-to-End Encrypted Enterprise Session</span>
+        </div>
+
+      </div>
+    </div>
+
   </div>
 
   <script>
+    // Canvas Spotlight Cursor Tracker
+    const canvas = document.getElementById('spotlight-canvas');
+    const ctx = canvas.getContext('2d');
+    let mouse = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+
+    window.addEventListener('mousemove', (e) => {
+      mouse.x = e.clientX;
+      mouse.y = e.clientY;
+    });
+
+    function drawSpotlight() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const gradient = ctx.createRadialGradient(mouse.x, mouse.y, 0, mouse.x, mouse.y, 350);
+      gradient.addColorStop(0, 'rgba(59, 130, 246, 0.12)');
+      gradient.addColorStop(0.5, 'rgba(6, 182, 212, 0.04)');
+      gradient.addColorStop(1, 'transparent');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      requestAnimationFrame(drawSpotlight);
+    }
+    drawSpotlight();
+
+    // Quick Fill Helper
+    function quickFill(user, pass) {
+      document.getElementById('login_id').value = user;
+      document.getElementById('password').value = pass;
+      document.getElementById('login_id').focus();
+    }
+
     // Password visibility toggle
     const passwordInput = document.getElementById('password');
     const passwordToggle = document.getElementById('password-toggle');
@@ -569,7 +865,7 @@
         errorBox.style.display = 'block';
         submitBtn.disabled = false;
         btnSpinner.style.display = 'none';
-        btnText.textContent = 'Sign In';
+        btnText.textContent = 'Sign In to Dashboard';
         console.error('Login error:', err);
       }
     });
