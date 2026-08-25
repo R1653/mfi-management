@@ -477,153 +477,229 @@ class Router {
 // ==========================================
 // 3. DASHBOARD VIEW (7 Charts + 10 Metric Cards)
 // ==========================================
+// ==========================================
+// 3. DASHBOARD VIEW (Interactive Executive Dashboard & Live Sync)
+// ==========================================
 const DashboardView = {
+  pollInterval: null,
+  countdownInterval: null,
+  secondsRemaining: 30,
+
   async render(container) {
+    if (DashboardView.pollInterval) clearInterval(DashboardView.pollInterval);
+    if (DashboardView.countdownInterval) clearInterval(DashboardView.countdownInterval);
+
     const res = await fetch('/api/dashboard');
     if (!res.ok) throw new Error('Failed to load dashboard data.');
     const { data } = await res.json();
 
     const { cards, charts, recent_activities, renewal_alerts } = data;
 
+    // Calculate percentage metrics
+    const mfiActivePct = cards.total_mfi > 0 ? Math.round((cards.active_mfi / cards.total_mfi) * 100) : 0;
+    const branchActivePct = cards.total_branches > 0 ? Math.round((cards.active_branches / cards.total_branches) * 100) : 0;
+
     container.innerHTML = `
-      <div class="page-header">
-        <div>
+      <!-- Executive Dashboard Live Header & Sync Controls -->
+      <div class="dashboard-header-bar">
+        <div class="dashboard-title-area">
           <h1 class="page-title">Executive Dashboard</h1>
+          <div class="live-pulse-badge">
+            <span class="pulse-dot-green"></span>
+            <span>Live Sync Active</span>
+          </div>
+        </div>
+
+        <div class="dashboard-controls">
+          <span class="sync-timer-label">Auto-syncing in <strong id="sync-countdown">30</strong>s</span>
+          <button class="btn btn-secondary btn-sm" id="dash-refresh-btn" onclick="DashboardView.manualRefresh()" title="Fetch Real-Time Data">
+            <svg class="btn-icon-spin" id="dash-refresh-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+            <span>Refresh Now</span>
+          </button>
         </div>
       </div>
 
-      <!-- 10 Dashboard Stat Cards Grid -->
+      <!-- 10 Enhanced Interactive Stat Cards Grid -->
       <div class="stats-grid">
         <!-- 1. Total MFI -->
-        <a href="/mfi" class="stat-card">
-          <div class="stat-icon-wrapper stat-icon-blue">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18M3 7v14M21 7v14M6 11h2M6 15h2M11 11h2M11 15h2M16 11h2M16 15h2M2 7l10-4 10 4"/></svg>
+        <a href="/mfi" class="stat-card-enhanced stat-card-blue">
+          <div class="stat-card-top">
+            <div class="stat-icon-box stat-icon-gradient-blue">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18M3 7v14M21 7v14M6 11h2M6 15h2M11 11h2M11 15h2M16 11h2M16 15h2M2 7l10-4 10 4"/></svg>
+            </div>
+            <span class="stat-trend-badge trend-badge-up">Total Registered</span>
           </div>
-          <div class="stat-info">
-            <div class="stat-label">Total MFI</div>
-            <div class="stat-value">${cards.total_mfi}</div>
-            <div class="stat-sub">Registered Institutions</div>
+          <div>
+            <div class="stat-number-main" id="card-total-mfi">${cards.total_mfi}</div>
+            <div class="stat-title-main">Total MFIs</div>
+          </div>
+          <div class="progress-mini-bar">
+            <div class="progress-mini-fill" style="width: 100%; background: #2563eb;"></div>
           </div>
         </a>
 
         <!-- 2. Active MFI -->
-        <a href="/mfi?status=active" class="stat-card">
-          <div class="stat-icon-wrapper stat-icon-green">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+        <a href="/mfi?status=active" class="stat-card-enhanced stat-card-green">
+          <div class="stat-card-top">
+            <div class="stat-icon-box stat-icon-gradient-green">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            </div>
+            <span class="stat-trend-badge trend-badge-up">${mfiActivePct}% Active</span>
           </div>
-          <div class="stat-info">
-            <div class="stat-label">Active MFI</div>
-            <div class="stat-value">${cards.active_mfi}</div>
-            <div class="stat-sub">Operational MFIs</div>
+          <div>
+            <div class="stat-number-main" id="card-active-mfi">${cards.active_mfi}</div>
+            <div class="stat-title-main">Active MFIs</div>
+          </div>
+          <div class="progress-mini-bar">
+            <div class="progress-mini-fill" style="width: ${mfiActivePct}%; background: #10b981;"></div>
           </div>
         </a>
 
         <!-- 3. Inactive MFI -->
-        <a href="/mfi?status=inactive" class="stat-card">
-          <div class="stat-icon-wrapper stat-icon-red">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+        <a href="/mfi?status=inactive" class="stat-card-enhanced stat-card-red">
+          <div class="stat-card-top">
+            <div class="stat-icon-box stat-icon-gradient-red">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+            </div>
+            <span class="stat-trend-badge trend-badge-neutral">${100 - mfiActivePct}% Inactive</span>
           </div>
-          <div class="stat-info">
-            <div class="stat-label">Inactive MFI</div>
-            <div class="stat-value">${cards.inactive_mfi}</div>
-            <div class="stat-sub">Suspended / Inactive</div>
+          <div>
+            <div class="stat-number-main" id="card-inactive-mfi">${cards.inactive_mfi}</div>
+            <div class="stat-title-main">Inactive MFIs</div>
+          </div>
+          <div class="progress-mini-bar">
+            <div class="progress-mini-fill" style="width: ${100 - mfiActivePct}%; background: #ef4444;"></div>
           </div>
         </a>
 
         <!-- 4. Total Branches -->
-        <a href="/branches" class="stat-card">
-          <div class="stat-icon-wrapper stat-icon-purple">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+        <a href="/branches" class="stat-card-enhanced stat-card-purple">
+          <div class="stat-card-top">
+            <div class="stat-icon-box stat-icon-gradient-purple">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+            </div>
+            <span class="stat-trend-badge trend-badge-up">Network Total</span>
           </div>
-          <div class="stat-info">
-            <div class="stat-label">Total Branches</div>
-            <div class="stat-value">${cards.total_branches}</div>
-            <div class="stat-sub">Across All MFIs</div>
+          <div>
+            <div class="stat-number-main" id="card-total-branches">${cards.total_branches}</div>
+            <div class="stat-title-main">Total Branches</div>
+          </div>
+          <div class="progress-mini-bar">
+            <div class="progress-mini-fill" style="width: 100%; background: #8b5cf6;"></div>
           </div>
         </a>
 
         <!-- 5. Active Branches -->
-        <a href="/branches?status=active" class="stat-card">
-          <div class="stat-icon-wrapper stat-icon-green">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+        <a href="/branches?status=active" class="stat-card-enhanced stat-card-green">
+          <div class="stat-card-top">
+            <div class="stat-icon-box stat-icon-gradient-green">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+            <span class="stat-trend-badge trend-badge-up">${branchActivePct}% Operational</span>
           </div>
-          <div class="stat-info">
-            <div class="stat-label">Active Branches</div>
-            <div class="stat-value">${cards.active_branches}</div>
-            <div class="stat-sub">Live Live Operations</div>
+          <div>
+            <div class="stat-number-main" id="card-active-branches">${cards.active_branches}</div>
+            <div class="stat-title-main">Active Branches</div>
+          </div>
+          <div class="progress-mini-bar">
+            <div class="progress-mini-fill" style="width: ${branchActivePct}%; background: #10b981;"></div>
           </div>
         </a>
 
         <!-- 6. Inactive Branches -->
-        <a href="/branches?status=inactive" class="stat-card">
-          <div class="stat-icon-wrapper stat-icon-red">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+        <a href="/branches?status=inactive" class="stat-card-enhanced stat-card-red">
+          <div class="stat-card-top">
+            <div class="stat-icon-box stat-icon-gradient-red">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+            </div>
+            <span class="stat-trend-badge trend-badge-neutral">${100 - branchActivePct}% Suspended</span>
           </div>
-          <div class="stat-info">
-            <div class="stat-label">Inactive Branches</div>
-            <div class="stat-value">${cards.inactive_branches}</div>
-            <div class="stat-sub">Dormant Branches</div>
+          <div>
+            <div class="stat-number-main" id="card-inactive-branches">${cards.inactive_branches}</div>
+            <div class="stat-title-main">Inactive Branches</div>
+          </div>
+          <div class="progress-mini-bar">
+            <div class="progress-mini-fill" style="width: ${100 - branchActivePct}%; background: #ef4444;"></div>
           </div>
         </a>
 
         <!-- 7. Branch Offices -->
-        <a href="/branches?branch_type=Branch Office" class="stat-card">
-          <div class="stat-icon-wrapper stat-icon-cyan">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+        <a href="/branches?branch_type=Branch Office" class="stat-card-enhanced stat-card-cyan">
+          <div class="stat-card-top">
+            <div class="stat-icon-box stat-icon-gradient-cyan">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+            </div>
+            <span class="stat-trend-badge trend-badge-neutral">Field Units</span>
           </div>
-          <div class="stat-info">
-            <div class="stat-label">Branch Offices</div>
-            <div class="stat-value">${cards.branch_offices}</div>
-            <div class="stat-sub">Field Service Units</div>
+          <div>
+            <div class="stat-number-main" id="card-branch-offices">${cards.branch_offices}</div>
+            <div class="stat-title-main">Branch Offices</div>
+          </div>
+          <div class="progress-mini-bar">
+            <div class="progress-mini-fill" style="width: 75%; background: #06b6d4;"></div>
           </div>
         </a>
 
         <!-- 8. Area Offices -->
-        <a href="/branches?branch_type=Area Office" class="stat-card">
-          <div class="stat-icon-wrapper stat-icon-amber">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+        <a href="/branches?branch_type=Area Office" class="stat-card-enhanced stat-card-amber">
+          <div class="stat-card-top">
+            <div class="stat-icon-box stat-icon-gradient-amber">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+            </div>
+            <span class="stat-trend-badge trend-badge-neutral">Regional Hubs</span>
           </div>
-          <div class="stat-info">
-            <div class="stat-label">Area Offices</div>
-            <div class="stat-value">${cards.area_offices}</div>
-            <div class="stat-sub">Regional Control Hubs</div>
+          <div>
+            <div class="stat-number-main" id="card-area-offices">${cards.area_offices}</div>
+            <div class="stat-title-main">Area Offices</div>
+          </div>
+          <div class="progress-mini-bar">
+            <div class="progress-mini-fill" style="width: 55%; background: #f59e0b;"></div>
           </div>
         </a>
 
         <!-- 9. Zone Offices -->
-        <a href="/branches?branch_type=Zone Office" class="stat-card">
-          <div class="stat-icon-wrapper stat-icon-purple">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/></svg>
+        <a href="/branches?branch_type=Zone Office" class="stat-card-enhanced stat-card-purple">
+          <div class="stat-card-top">
+            <div class="stat-icon-box stat-icon-gradient-purple">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/></svg>
+            </div>
+            <span class="stat-trend-badge trend-badge-neutral">Zone HQ</span>
           </div>
-          <div class="stat-info">
-            <div class="stat-label">Zone Offices</div>
-            <div class="stat-value">${cards.zone_offices}</div>
-            <div class="stat-sub">Zonal Headquarters</div>
+          <div>
+            <div class="stat-number-main" id="card-zone-offices">${cards.zone_offices}</div>
+            <div class="stat-title-main">Zone Offices</div>
+          </div>
+          <div class="progress-mini-bar">
+            <div class="progress-mini-fill" style="width: 40%; background: #8b5cf6;"></div>
           </div>
         </a>
 
-        <!-- 10. Expiring Soon -->
-        <a href="/reports/renewal-due" class="stat-card" style="border-left: 4px solid var(--warning);">
-          <div class="stat-icon-wrapper stat-icon-amber">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 14 14"/></svg>
+        <!-- 10. Renewal Alerts -->
+        <a href="/reports/renewal-due" class="stat-card-enhanced stat-card-amber">
+          <div class="stat-card-top">
+            <div class="stat-icon-box stat-icon-gradient-amber">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 14 14"/></svg>
+            </div>
+            <span class="stat-trend-badge trend-badge-warn">${cards.expiring_soon} Action Required</span>
           </div>
-          <div class="stat-info">
-            <div class="stat-label">Renewal Alerts</div>
-            <div class="stat-value">${cards.expiring_soon}</div>
-            <div class="stat-sub">Agreements In 90 Days</div>
+          <div>
+            <div class="stat-number-main" id="card-expiring-soon">${cards.expiring_soon}</div>
+            <div class="stat-title-main">Renewal Alerts</div>
+          </div>
+          <div class="progress-mini-bar">
+            <div class="progress-mini-fill" style="width: 90%; background: #f59e0b;"></div>
           </div>
         </a>
       </div>
 
-      <!-- Charts Section: 7 Live Charts -->
-      <!-- Row 1: Status Distributions -->
+      <!-- Charts Grid Row 1: Status Distributions -->
       <div class="charts-grid-2">
         <div class="card">
           <div class="card-header">
-            <h3 class="card-title">1. MFI Status Distribution</h3>
+            <h3 class="card-title">1. MFI Operational Status Distribution</h3>
           </div>
           <div class="card-body">
-            <div class="chart-container">
+            <div class="chart-container" style="position: relative; height: 260px;">
               <canvas id="chart-mfi-status"></canvas>
             </div>
           </div>
@@ -631,24 +707,24 @@ const DashboardView = {
 
         <div class="card">
           <div class="card-header">
-            <h3 class="card-title">2. Branch Status Distribution</h3>
+            <h3 class="card-title">2. Branch Operational Status Distribution</h3>
           </div>
           <div class="card-body">
-            <div class="chart-container">
+            <div class="chart-container" style="position: relative; height: 260px;">
               <canvas id="chart-branch-status"></canvas>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- Row 2: Branch Types & MFI Branch Counts -->
+      <!-- Charts Grid Row 2: Branch Types & MFI Branch Count -->
       <div class="charts-grid-2">
         <div class="card">
           <div class="card-header">
-            <h3 class="card-title">3. Branch Type Distribution</h3>
+            <h3 class="card-title">3. Branch Type Distribution Breakdown</h3>
           </div>
           <div class="card-body">
-            <div class="chart-container">
+            <div class="chart-container" style="position: relative; height: 260px;">
               <canvas id="chart-branch-types"></canvas>
             </div>
           </div>
@@ -656,36 +732,36 @@ const DashboardView = {
 
         <div class="card">
           <div class="card-header">
-            <h3 class="card-title">4. MFI-wise Branch Count</h3>
+            <h3 class="card-title">4. MFI-wise Branch Allocation</h3>
           </div>
           <div class="card-body">
-            <div class="chart-container">
+            <div class="chart-container" style="position: relative; height: 260px;">
               <canvas id="chart-mfi-branches"></canvas>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- Row 3: Renewal Trend -->
+      <!-- Charts Grid Row 3: Renewal Trend Line -->
       <div class="card">
         <div class="card-header">
           <h3 class="card-title">5. Agreement Renewal & Average Rate Trend (By Year)</h3>
         </div>
         <div class="card-body">
-          <div class="chart-container" style="height: 300px;">
+          <div class="chart-container" style="position: relative; height: 280px;">
             <canvas id="chart-renewal-trend"></canvas>
           </div>
         </div>
       </div>
 
-      <!-- Row 4: MFI-wise Fee Comparison (License Fee & O&M Fee) -->
+      <!-- Charts Grid Row 4: Fee Comparison Bars -->
       <div class="charts-grid-2">
         <div class="card">
           <div class="card-header">
             <h3 class="card-title">6. MFI-wise License Fee per Branch</h3>
           </div>
           <div class="card-body">
-            <div class="chart-container">
+            <div class="chart-container" style="position: relative; height: 260px;">
               <canvas id="chart-license-fees"></canvas>
             </div>
           </div>
@@ -696,20 +772,168 @@ const DashboardView = {
             <h3 class="card-title">7. MFI-wise O&M Fee per Branch</h3>
           </div>
           <div class="card-body">
-            <div class="chart-container">
+            <div class="chart-container" style="position: relative; height: 260px;">
               <canvas id="chart-om-fees"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Real-Time Activity Feed & Quick Actions Row -->
+      <div class="charts-grid-2">
+        <!-- Live Audit Activity Feed Widget -->
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">Live System Audit Activity</h3>
+            <a href="/audit-logs" class="btn btn-sm btn-secondary">View Full Log</a>
+          </div>
+          <div class="card-body" id="dash-activity-list">
+            ${DashboardView.renderActivitiesHTML(recent_activities)}
+          </div>
+        </div>
+
+        <!-- System Quick Action Shortcuts -->
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">Quick Action Shortcuts</h3>
+          </div>
+          <div class="card-body">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+              <a href="/mfi/create" class="btn btn-primary" style="justify-content: center; padding: 14px;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+                <span>Add New MFI</span>
+              </a>
+              <a href="/branches/create" class="btn btn-secondary" style="justify-content: center; padding: 14px;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+                <span>Add Branch</span>
+              </a>
+              <a href="/agreements/create" class="btn btn-secondary" style="justify-content: center; padding: 14px;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                <span>Add Agreement</span>
+              </a>
+              <a href="/migration" class="btn btn-secondary" style="justify-content: center; padding: 14px;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                <span>Data Migration</span>
+              </a>
             </div>
           </div>
         </div>
       </div>
     `;
 
-    // Render Chart.js instances
+    // Render Chart.js instances with rich gradient fills
     DashboardView.initCharts(charts);
+
+    // Setup live polling timer (every 30s)
+    DashboardView.secondsRemaining = 30;
+    DashboardView.countdownInterval = setInterval(() => {
+      if (AppState.currentRoute !== '/dashboard') {
+        clearInterval(DashboardView.countdownInterval);
+        if (DashboardView.pollInterval) clearInterval(DashboardView.pollInterval);
+        return;
+      }
+      DashboardView.secondsRemaining--;
+      const el = document.getElementById('sync-countdown');
+      if (el) el.textContent = DashboardView.secondsRemaining;
+      if (DashboardView.secondsRemaining <= 0) {
+        DashboardView.secondsRemaining = 30;
+        DashboardView.manualRefresh(true);
+      }
+    }, 1000);
+  },
+
+  renderActivitiesHTML(activities) {
+    if (!activities || activities.length === 0) {
+      return `<div style="color: var(--text-muted); font-size: 13px; text-align: center; padding: 20px;">No recent audit activity.</div>`;
+    }
+    return activities.map(act => {
+      const userInitial = (act.user_name || 'System').substring(0, 2).toUpperCase();
+      return `
+        <div class="widget-feed-item">
+          <div class="feed-avatar">${userInitial}</div>
+          <div class="feed-content">
+            <div class="feed-title">${act.description || act.action}</div>
+            <div class="feed-meta">By <strong>${act.user_name || 'System'}</strong> • ${act.created_at_formatted || 'Recently'}</div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  },
+
+  async manualRefresh(isSilent = false) {
+    const icon = document.getElementById('dash-refresh-icon');
+    if (icon) icon.classList.add('spin-active');
+
+    try {
+      const res = await fetch('/api/dashboard');
+      if (!res.ok) return;
+      const { data } = await res.json();
+      const { cards, charts, recent_activities } = data;
+
+      // Update Card values smoothly
+      const updateEl = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+      updateEl('card-total-mfi', cards.total_mfi);
+      updateEl('card-active-mfi', cards.active_mfi);
+      updateEl('card-inactive-mfi', cards.inactive_mfi);
+      updateEl('card-total-branches', cards.total_branches);
+      updateEl('card-active-branches', cards.active_branches);
+      updateEl('card-inactive-branches', cards.inactive_branches);
+      updateEl('card-branch-offices', cards.branch_offices);
+      updateEl('card-area-offices', cards.area_offices);
+      updateEl('card-zone-offices', cards.zone_offices);
+      updateEl('card-expiring-soon', cards.expiring_soon);
+
+      // Update Audit feed
+      const activityEl = document.getElementById('dash-activity-list');
+      if (activityEl) activityEl.innerHTML = DashboardView.renderActivitiesHTML(recent_activities);
+
+      // Update Chart datasets
+      if (AppState.charts.mfiStatus) {
+        AppState.charts.mfiStatus.data.datasets[0].data = charts.mfi_status.data;
+        AppState.charts.mfiStatus.update();
+      }
+      if (AppState.charts.branchStatus) {
+        AppState.charts.branchStatus.data.datasets[0].data = charts.branch_status.data;
+        AppState.charts.branchStatus.update();
+      }
+      if (AppState.charts.branchTypes) {
+        AppState.charts.branchTypes.data.datasets[0].data = charts.branch_types.data;
+        AppState.charts.branchTypes.update();
+      }
+      if (AppState.charts.mfiBranches) {
+        AppState.charts.mfiBranches.data.labels = charts.mfi_branch_counts.labels;
+        AppState.charts.mfiBranches.data.datasets[0].data = charts.mfi_branch_counts.data;
+        AppState.charts.mfiBranches.update();
+      }
+      if (AppState.charts.renewalTrend) {
+        AppState.charts.renewalTrend.data.labels = charts.renewal_trend.labels;
+        AppState.charts.renewalTrend.data.datasets[0].data = charts.renewal_trend.data;
+        AppState.charts.renewalTrend.data.datasets[1].data = charts.renewal_trend.avg_license;
+        AppState.charts.renewalTrend.update();
+      }
+      if (AppState.charts.licenseFees) {
+        AppState.charts.licenseFees.data.labels = charts.mfi_fees.labels;
+        AppState.charts.licenseFees.data.datasets[0].data = charts.mfi_fees.license_fees;
+        AppState.charts.licenseFees.update();
+      }
+      if (AppState.charts.omFees) {
+        AppState.charts.omFees.data.labels = charts.mfi_fees.labels;
+        AppState.charts.omFees.data.datasets[0].data = charts.mfi_fees.om_fees;
+        AppState.charts.omFees.update();
+      }
+
+      if (!isSilent) UI.showToast('Dashboard metrics updated in real-time!', 'success');
+    } catch (err) {
+      console.error('Refresh error:', err);
+    } finally {
+      setTimeout(() => {
+        if (icon) icon.classList.remove('spin-active');
+      }, 600);
+    }
   },
 
   initCharts(charts) {
-    // 1. MFI Active vs Inactive
+    // 1. MFI Active vs Inactive (Doughnut with cutout & vibrant colors)
     const ctx1 = document.getElementById('chart-mfi-status')?.getContext('2d');
     if (ctx1) {
       AppState.charts.mfiStatus = new Chart(ctx1, {
@@ -718,15 +942,24 @@ const DashboardView = {
           labels: charts.mfi_status.labels,
           datasets: [{
             data: charts.mfi_status.data,
-            backgroundColor: ['#059669', '#dc2626'],
-            borderWidth: 2
+            backgroundColor: ['#10b981', '#ef4444'],
+            hoverBackgroundColor: ['#059669', '#dc2626'],
+            borderWidth: 3,
+            borderColor: '#ffffff'
           }]
         },
-        options: { responsive: true, maintainAspectRatio: false }
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          cutout: '72%',
+          plugins: {
+            legend: { position: 'bottom', labels: { usePointStyle: true, font: { family: 'Inter', weight: '600' } } }
+          }
+        }
       });
     }
 
-    // 2. Branch Active vs Inactive
+    // 2. Branch Active vs Inactive (Doughnut)
     const ctx2 = document.getElementById('chart-branch-status')?.getContext('2d');
     if (ctx2) {
       AppState.charts.branchStatus = new Chart(ctx2, {
@@ -735,15 +968,24 @@ const DashboardView = {
           labels: charts.branch_status.labels,
           datasets: [{
             data: charts.branch_status.data,
-            backgroundColor: ['#059669', '#dc2626'],
-            borderWidth: 2
+            backgroundColor: ['#10b981', '#ef4444'],
+            hoverBackgroundColor: ['#059669', '#dc2626'],
+            borderWidth: 3,
+            borderColor: '#ffffff'
           }]
         },
-        options: { responsive: true, maintainAspectRatio: false }
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          cutout: '72%',
+          plugins: {
+            legend: { position: 'bottom', labels: { usePointStyle: true, font: { family: 'Inter', weight: '600' } } }
+          }
+        }
       });
     }
 
-    // 3. Branch Type Distribution
+    // 3. Branch Type Distribution (Polar Area / Doughnut)
     const ctx3 = document.getElementById('chart-branch-types')?.getContext('2d');
     if (ctx3) {
       AppState.charts.branchTypes = new Chart(ctx3, {
@@ -752,16 +994,28 @@ const DashboardView = {
           labels: charts.branch_types.labels,
           datasets: [{
             data: charts.branch_types.data,
-            backgroundColor: ['rgba(2, 132, 199, 0.7)', 'rgba(217, 119, 6, 0.7)', 'rgba(147, 51, 234, 0.7)']
+            backgroundColor: ['rgba(6, 182, 212, 0.75)', 'rgba(245, 158, 11, 0.75)', 'rgba(139, 92, 246, 0.75)'],
+            borderColor: ['#06b6d4', '#f59e0b', '#8b5cf6'],
+            borderWidth: 2
           }]
         },
-        options: { responsive: true, maintainAspectRatio: false }
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { position: 'bottom', labels: { usePointStyle: true, font: { family: 'Inter', weight: '600' } } }
+          }
+        }
       });
     }
 
-    // 4. MFI Branch Count
+    // 4. MFI Branch Count (Bar Chart with Canvas Linear Gradient)
     const ctx4 = document.getElementById('chart-mfi-branches')?.getContext('2d');
     if (ctx4) {
+      const grad4 = ctx4.createLinearGradient(0, 0, 0, 260);
+      grad4.addColorStop(0, '#3b82f6');
+      grad4.addColorStop(1, '#1d4ed8');
+
       AppState.charts.mfiBranches = new Chart(ctx4, {
         type: 'bar',
         data: {
@@ -769,17 +1023,27 @@ const DashboardView = {
           datasets: [{
             label: 'Total Branches',
             data: charts.mfi_branch_counts.data,
-            backgroundColor: '#1a56db',
-            borderRadius: 6
+            backgroundColor: grad4,
+            borderRadius: 8,
+            borderSkipped: false
           }]
         },
-        options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: { y: { beginAtZero: true, grid: { color: '#f1f5f9' } }, x: { grid: { display: false } } }
+        }
       });
     }
 
-    // 5. Renewal Trend
+    // 5. Renewal Trend (Smooth Cubic Bezier Area Chart)
     const ctx5 = document.getElementById('chart-renewal-trend')?.getContext('2d');
     if (ctx5) {
+      const grad5 = ctx5.createLinearGradient(0, 0, 0, 280);
+      grad5.addColorStop(0, 'rgba(59, 130, 246, 0.35)');
+      grad5.addColorStop(1, 'rgba(59, 130, 246, 0.02)');
+
       AppState.charts.renewalTrend = new Chart(ctx5, {
         type: 'line',
         data: {
@@ -788,18 +1052,23 @@ const DashboardView = {
             {
               label: 'Renewals Signed',
               data: charts.renewal_trend.data,
-              borderColor: '#1a56db',
-              backgroundColor: 'rgba(26, 86, 219, 0.1)',
+              borderColor: '#2563eb',
+              backgroundColor: grad5,
               fill: true,
-              tension: 0.3,
+              tension: 0.4,
+              borderWidth: 3,
+              pointBackgroundColor: '#2563eb',
+              pointRadius: 4,
               yAxisID: 'y'
             },
             {
-              label: 'Avg License Fee',
+              label: 'Avg License Fee per Branch',
               data: charts.renewal_trend.avg_license,
-              borderColor: '#059669',
+              borderColor: '#10b981',
               borderDash: [5, 5],
-              tension: 0.3,
+              tension: 0.4,
+              borderWidth: 2,
+              pointRadius: 0,
               yAxisID: 'y1'
             }
           ]
@@ -807,47 +1076,71 @@ const DashboardView = {
         options: {
           responsive: true,
           maintainAspectRatio: false,
+          plugins: {
+            legend: { position: 'top', labels: { usePointStyle: true, font: { family: 'Inter', weight: '600' } } }
+          },
           scales: {
-            y: { type: 'linear', display: true, position: 'left', beginAtZero: true },
-            y1: { type: 'linear', display: true, position: 'right', grid: { drawOnChartArea: false } }
+            y: { type: 'linear', display: true, position: 'left', beginAtZero: true, grid: { color: '#f1f5f9' } },
+            y1: { type: 'linear', display: true, position: 'right', grid: { drawOnChartArea: false } },
+            x: { grid: { display: false } }
           }
         }
       });
     }
 
-    // 6. License Fee per MFI
+    // 6. License Fee per MFI (Cyan Gradient Bar)
     const ctx6 = document.getElementById('chart-license-fees')?.getContext('2d');
     if (ctx6) {
+      const grad6 = ctx6.createLinearGradient(0, 0, 0, 260);
+      grad6.addColorStop(0, '#06b6d4');
+      grad6.addColorStop(1, '#0284c7');
+
       AppState.charts.licenseFees = new Chart(ctx6, {
         type: 'bar',
         data: {
           labels: charts.mfi_fees.labels,
           datasets: [{
-            label: 'License Fee',
+            label: 'License Fee per Branch',
             data: charts.mfi_fees.license_fees,
-            backgroundColor: '#0284c7',
-            borderRadius: 6
+            backgroundColor: grad6,
+            borderRadius: 8,
+            borderSkipped: false
           }]
         },
-        options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: { y: { beginAtZero: true, grid: { color: '#f1f5f9' } }, x: { grid: { display: false } } }
+        }
       });
     }
 
-    // 7. O&M Fee per MFI
+    // 7. O&M Fee per MFI (Amber Gradient Bar)
     const ctx7 = document.getElementById('chart-om-fees')?.getContext('2d');
     if (ctx7) {
+      const grad7 = ctx7.createLinearGradient(0, 0, 0, 260);
+      grad7.addColorStop(0, '#f59e0b');
+      grad7.addColorStop(1, '#d97706');
+
       AppState.charts.omFees = new Chart(ctx7, {
         type: 'bar',
         data: {
           labels: charts.mfi_fees.labels,
           datasets: [{
-            label: 'O&M Fee',
+            label: 'O&M Fee per Branch',
             data: charts.mfi_fees.om_fees,
-            backgroundColor: '#d97706',
-            borderRadius: 6
+            backgroundColor: grad7,
+            borderRadius: 8,
+            borderSkipped: false
           }]
         },
-        options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: { y: { beginAtZero: true, grid: { color: '#f1f5f9' } }, x: { grid: { display: false } } }
+        }
       });
     }
   }
