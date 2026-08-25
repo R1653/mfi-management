@@ -478,7 +478,7 @@ class Router {
 // 3. DASHBOARD VIEW (7 Charts + 10 Metric Cards)
 // ==========================================
 // ==========================================
-// 3. DASHBOARD VIEW (Interactive Executive Dashboard & Live Sync)
+// 3. DASHBOARD VIEW (Interactive Executive Dashboard & 3D Depth)
 // ==========================================
 const DashboardView = {
   pollInterval: null,
@@ -493,7 +493,7 @@ const DashboardView = {
     if (!res.ok) throw new Error('Failed to load dashboard data.');
     const { data } = await res.json();
 
-    const { cards, charts, recent_activities, renewal_alerts } = data;
+    const { cards, charts } = data;
 
     // Calculate percentage metrics
     const mfiActivePct = cards.total_mfi > 0 ? Math.round((cards.active_mfi / cards.total_mfi) * 100) : 0;
@@ -519,12 +519,12 @@ const DashboardView = {
         </div>
       </div>
 
-      <!-- 10 Enhanced Interactive Stat Cards Grid -->
+      <!-- 10 Interactive 3D Stat Cards Grid -->
       <div class="stats-grid">
         <!-- 1. Total MFI -->
-        <a href="/mfi" class="stat-card-enhanced stat-card-blue">
+        <a href="/mfi" class="stat-card-3d stat-card-indigo">
           <div class="stat-card-top">
-            <div class="stat-icon-box stat-icon-gradient-blue">
+            <div class="stat-icon-3d-box stat-icon-indigo">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18M3 7v14M21 7v14M6 11h2M6 15h2M11 11h2M11 15h2M16 11h2M16 15h2M2 7l10-4 10 4"/></svg>
             </div>
             <span class="stat-trend-badge trend-badge-up">Total Registered</span>
@@ -534,14 +534,14 @@ const DashboardView = {
             <div class="stat-title-main">Total MFIs</div>
           </div>
           <div class="progress-mini-bar">
-            <div class="progress-mini-fill" style="width: 100%; background: #2563eb;"></div>
+            <div class="progress-mini-fill" style="width: 100%; background: #4f46e5;"></div>
           </div>
         </a>
 
         <!-- 2. Active MFI -->
-        <a href="/mfi?status=active" class="stat-card-enhanced stat-card-green">
+        <a href="/mfi?status=active" class="stat-card-3d stat-card-emerald">
           <div class="stat-card-top">
-            <div class="stat-icon-box stat-icon-gradient-green">
+            <div class="stat-icon-3d-box stat-icon-emerald">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
             </div>
             <span class="stat-trend-badge trend-badge-up">${mfiActivePct}% Active</span>
@@ -551,14 +551,14 @@ const DashboardView = {
             <div class="stat-title-main">Active MFIs</div>
           </div>
           <div class="progress-mini-bar">
-            <div class="progress-mini-fill" style="width: ${mfiActivePct}%; background: #10b981;"></div>
+            <div class="progress-mini-fill" style="width: ${mfiActivePct}%; background: #059669;"></div>
           </div>
         </a>
 
         <!-- 3. Inactive MFI -->
-        <a href="/mfi?status=inactive" class="stat-card-enhanced stat-card-red">
+        <a href="/mfi?status=inactive" class="stat-card-3d stat-card-rose">
           <div class="stat-card-top">
-            <div class="stat-icon-box stat-icon-gradient-red">
+            <div class="stat-icon-3d-box stat-icon-rose">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
             </div>
             <span class="stat-trend-badge trend-badge-neutral">${100 - mfiActivePct}% Inactive</span>
@@ -568,14 +568,14 @@ const DashboardView = {
             <div class="stat-title-main">Inactive MFIs</div>
           </div>
           <div class="progress-mini-bar">
-            <div class="progress-mini-fill" style="width: ${100 - mfiActivePct}%; background: #ef4444;"></div>
+            <div class="progress-mini-fill" style="width: ${100 - mfiActivePct}%; background: #e11d48;"></div>
           </div>
         </a>
 
         <!-- 4. Total Branches -->
-        <a href="/branches" class="stat-card-enhanced stat-card-purple">
+        <a href="/branches" class="stat-card-3d stat-card-violet">
           <div class="stat-card-top">
-            <div class="stat-icon-box stat-icon-gradient-purple">
+            <div class="stat-icon-3d-box stat-icon-violet">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
             </div>
             <span class="stat-trend-badge trend-badge-up">Network Total</span>
@@ -585,14 +585,14 @@ const DashboardView = {
             <div class="stat-title-main">Total Branches</div>
           </div>
           <div class="progress-mini-bar">
-            <div class="progress-mini-fill" style="width: 100%; background: #8b5cf6;"></div>
+            <div class="progress-mini-fill" style="width: 100%; background: #7c3aed;"></div>
           </div>
         </a>
 
         <!-- 5. Active Branches -->
-        <a href="/branches?status=active" class="stat-card-enhanced stat-card-green">
+        <a href="/branches?status=active" class="stat-card-3d stat-card-emerald">
           <div class="stat-card-top">
-            <div class="stat-icon-box stat-icon-gradient-green">
+            <div class="stat-icon-3d-box stat-icon-emerald">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
             </div>
             <span class="stat-trend-badge trend-badge-up">${branchActivePct}% Operational</span>
@@ -602,14 +602,14 @@ const DashboardView = {
             <div class="stat-title-main">Active Branches</div>
           </div>
           <div class="progress-mini-bar">
-            <div class="progress-mini-fill" style="width: ${branchActivePct}%; background: #10b981;"></div>
+            <div class="progress-mini-fill" style="width: ${branchActivePct}%; background: #059669;"></div>
           </div>
         </a>
 
         <!-- 6. Inactive Branches -->
-        <a href="/branches?status=inactive" class="stat-card-enhanced stat-card-red">
+        <a href="/branches?status=inactive" class="stat-card-3d stat-card-rose">
           <div class="stat-card-top">
-            <div class="stat-icon-box stat-icon-gradient-red">
+            <div class="stat-icon-3d-box stat-icon-rose">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
             </div>
             <span class="stat-trend-badge trend-badge-neutral">${100 - branchActivePct}% Suspended</span>
@@ -619,14 +619,14 @@ const DashboardView = {
             <div class="stat-title-main">Inactive Branches</div>
           </div>
           <div class="progress-mini-bar">
-            <div class="progress-mini-fill" style="width: ${100 - branchActivePct}%; background: #ef4444;"></div>
+            <div class="progress-mini-fill" style="width: ${100 - branchActivePct}%; background: #e11d48;"></div>
           </div>
         </a>
 
         <!-- 7. Branch Offices -->
-        <a href="/branches?branch_type=Branch Office" class="stat-card-enhanced stat-card-cyan">
+        <a href="/branches?branch_type=Branch Office" class="stat-card-3d stat-card-cyan">
           <div class="stat-card-top">
-            <div class="stat-icon-box stat-icon-gradient-cyan">
+            <div class="stat-icon-3d-box stat-icon-cyan">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
             </div>
             <span class="stat-trend-badge trend-badge-neutral">Field Units</span>
@@ -636,14 +636,14 @@ const DashboardView = {
             <div class="stat-title-main">Branch Offices</div>
           </div>
           <div class="progress-mini-bar">
-            <div class="progress-mini-fill" style="width: 75%; background: #06b6d4;"></div>
+            <div class="progress-mini-fill" style="width: 75%; background: #0284c7;"></div>
           </div>
         </a>
 
         <!-- 8. Area Offices -->
-        <a href="/branches?branch_type=Area Office" class="stat-card-enhanced stat-card-amber">
+        <a href="/branches?branch_type=Area Office" class="stat-card-3d stat-card-amber">
           <div class="stat-card-top">
-            <div class="stat-icon-box stat-icon-gradient-amber">
+            <div class="stat-icon-3d-box stat-icon-amber">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
             </div>
             <span class="stat-trend-badge trend-badge-neutral">Regional Hubs</span>
@@ -653,14 +653,14 @@ const DashboardView = {
             <div class="stat-title-main">Area Offices</div>
           </div>
           <div class="progress-mini-bar">
-            <div class="progress-mini-fill" style="width: 55%; background: #f59e0b;"></div>
+            <div class="progress-mini-fill" style="width: 55%; background: #d97706;"></div>
           </div>
         </a>
 
         <!-- 9. Zone Offices -->
-        <a href="/branches?branch_type=Zone Office" class="stat-card-enhanced stat-card-purple">
+        <a href="/branches?branch_type=Zone Office" class="stat-card-3d stat-card-violet">
           <div class="stat-card-top">
-            <div class="stat-icon-box stat-icon-gradient-purple">
+            <div class="stat-icon-3d-box stat-icon-violet">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/></svg>
             </div>
             <span class="stat-trend-badge trend-badge-neutral">Zone HQ</span>
@@ -670,14 +670,14 @@ const DashboardView = {
             <div class="stat-title-main">Zone Offices</div>
           </div>
           <div class="progress-mini-bar">
-            <div class="progress-mini-fill" style="width: 40%; background: #8b5cf6;"></div>
+            <div class="progress-mini-fill" style="width: 40%; background: #7c3aed;"></div>
           </div>
         </a>
 
         <!-- 10. Renewal Alerts -->
-        <a href="/reports/renewal-due" class="stat-card-enhanced stat-card-amber">
+        <a href="/reports/renewal-due" class="stat-card-3d stat-card-amber">
           <div class="stat-card-top">
-            <div class="stat-icon-box stat-icon-gradient-amber">
+            <div class="stat-icon-3d-box stat-icon-amber">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 14 14"/></svg>
             </div>
             <span class="stat-trend-badge trend-badge-warn">${cards.expiring_soon} Action Required</span>
@@ -687,7 +687,7 @@ const DashboardView = {
             <div class="stat-title-main">Renewal Alerts</div>
           </div>
           <div class="progress-mini-bar">
-            <div class="progress-mini-fill" style="width: 90%; background: #f59e0b;"></div>
+            <div class="progress-mini-fill" style="width: 90%; background: #d97706;"></div>
           </div>
         </a>
       </div>
@@ -779,43 +779,37 @@ const DashboardView = {
         </div>
       </div>
 
-      <!-- Real-Time Activity Feed & Quick Actions Row -->
-      <div class="charts-grid-2">
-        <!-- Live Audit Activity Feed Widget -->
-        <div class="card">
-          <div class="card-header">
-            <h3 class="card-title">Live System Audit Activity</h3>
-            <a href="/audit-logs" class="btn btn-sm btn-secondary">View Full Log</a>
-          </div>
-          <div class="card-body" id="dash-activity-list">
-            ${DashboardView.renderActivitiesHTML(recent_activities)}
-          </div>
+      <!-- Executive Quick Action Shortcuts (Full Width 3D Grid) -->
+      <div class="card" style="margin-bottom: 24px;">
+        <div class="card-header">
+          <h3 class="card-title">Executive Quick Action Shortcuts</h3>
         </div>
-
-        <!-- System Quick Action Shortcuts -->
-        <div class="card">
-          <div class="card-header">
-            <h3 class="card-title">Quick Action Shortcuts</h3>
-          </div>
-          <div class="card-body">
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-              <a href="/mfi/create" class="btn btn-primary" style="justify-content: center; padding: 14px;">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
-                <span>Add New MFI</span>
-              </a>
-              <a href="/branches/create" class="btn btn-secondary" style="justify-content: center; padding: 14px;">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
-                <span>Add Branch</span>
-              </a>
-              <a href="/agreements/create" class="btn btn-secondary" style="justify-content: center; padding: 14px;">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                <span>Add Agreement</span>
-              </a>
-              <a href="/migration" class="btn btn-secondary" style="justify-content: center; padding: 14px;">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                <span>Data Migration</span>
-              </a>
-            </div>
+        <div class="card-body">
+          <div class="quick-actions-3d-grid">
+            <a href="/mfi/create" class="quick-action-3d-card">
+              <div class="quick-action-icon stat-icon-indigo">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+              </div>
+              <span>Register New MFI</span>
+            </a>
+            <a href="/branches/create" class="quick-action-3d-card">
+              <div class="quick-action-icon stat-icon-emerald">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+              </div>
+              <span>Add Branch Office</span>
+            </a>
+            <a href="/agreements/create" class="quick-action-3d-card">
+              <div class="quick-action-icon stat-icon-violet">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              </div>
+              <span>Add Agreement</span>
+            </a>
+            <a href="/migration" class="quick-action-3d-card">
+              <div class="quick-action-icon stat-icon-amber">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              </div>
+              <span>Data Migration Tool</span>
+            </a>
           </div>
         </div>
       </div>
@@ -823,6 +817,9 @@ const DashboardView = {
 
     // Render Chart.js instances with rich gradient fills
     DashboardView.initCharts(charts);
+
+    // Init 3D Card tilt mouse tracking
+    DashboardView.init3DTilt();
 
     // Setup live polling timer (every 30s)
     DashboardView.secondsRemaining = 30;
@@ -840,6 +837,94 @@ const DashboardView = {
         DashboardView.manualRefresh(true);
       }
     }, 1000);
+  },
+
+  init3DTilt() {
+    const cards = document.querySelectorAll('.stat-card-3d');
+    cards.forEach(card => {
+      card.addEventListener('mousemove', (e) => {
+        const rect = card.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        const centerX = rect.width / 2;
+        const centerY = rect.height / 2;
+        const rotateX = ((y - centerY) / centerY) * -6;
+        const rotateY = ((x - centerX) / centerX) * 6;
+        card.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale3d(1.02, 1.02, 1.02)`;
+      });
+
+      card.addEventListener('mouseleave', () => {
+        card.style.transform = 'perspective(1000px) rotateX(0deg) rotateY(0deg) scale3d(1, 1, 1)';
+      });
+    });
+  },
+
+  async manualRefresh(isSilent = false) {
+    const icon = document.getElementById('dash-refresh-icon');
+    if (icon) icon.classList.add('spin-active');
+
+    try {
+      const res = await fetch('/api/dashboard');
+      if (!res.ok) return;
+      const { data } = await res.json();
+      const { cards, charts } = data;
+
+      // Update Card values smoothly
+      const updateEl = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+      updateEl('card-total-mfi', cards.total_mfi);
+      updateEl('card-active-mfi', cards.active_mfi);
+      updateEl('card-inactive-mfi', cards.inactive_mfi);
+      updateEl('card-total-branches', cards.total_branches);
+      updateEl('card-active-branches', cards.active_branches);
+      updateEl('card-inactive-branches', cards.inactive_branches);
+      updateEl('card-branch-offices', cards.branch_offices);
+      updateEl('card-area-offices', cards.area_offices);
+      updateEl('card-zone-offices', cards.zone_offices);
+      updateEl('card-expiring-soon', cards.expiring_soon);
+
+      // Update Chart datasets
+      if (AppState.charts.mfiStatus) {
+        AppState.charts.mfiStatus.data.datasets[0].data = charts.mfi_status.data;
+        AppState.charts.mfiStatus.update();
+      }
+      if (AppState.charts.branchStatus) {
+        AppState.charts.branchStatus.data.datasets[0].data = charts.branch_status.data;
+        AppState.charts.branchStatus.update();
+      }
+      if (AppState.charts.branchTypes) {
+        AppState.charts.branchTypes.data.datasets[0].data = charts.branch_types.data;
+        AppState.charts.branchTypes.update();
+      }
+      if (AppState.charts.mfiBranches) {
+        AppState.charts.mfiBranches.data.labels = charts.mfi_branch_counts.labels;
+        AppState.charts.mfiBranches.data.datasets[0].data = charts.mfi_branch_counts.data;
+        AppState.charts.mfiBranches.update();
+      }
+      if (AppState.charts.renewalTrend) {
+        AppState.charts.renewalTrend.data.labels = charts.renewal_trend.labels;
+        AppState.charts.renewalTrend.data.datasets[0].data = charts.renewal_trend.data;
+        AppState.charts.renewalTrend.data.datasets[1].data = charts.renewal_trend.avg_license;
+        AppState.charts.renewalTrend.update();
+      }
+      if (AppState.charts.licenseFees) {
+        AppState.charts.licenseFees.data.labels = charts.mfi_fees.labels;
+        AppState.charts.licenseFees.data.datasets[0].data = charts.mfi_fees.license_fees;
+        AppState.charts.licenseFees.update();
+      }
+      if (AppState.charts.omFees) {
+        AppState.charts.omFees.data.labels = charts.mfi_fees.labels;
+        AppState.charts.omFees.data.datasets[0].data = charts.mfi_fees.om_fees;
+        AppState.charts.omFees.update();
+      }
+
+      if (!isSilent) UI.showToast('Dashboard metrics updated in real-time!', 'success');
+    } catch (err) {
+      console.error('Refresh error:', err);
+    } finally {
+      setTimeout(() => {
+        if (icon) icon.classList.remove('spin-active');
+      }, 600);
+    }
   },
 
   renderActivitiesHTML(activities) {
