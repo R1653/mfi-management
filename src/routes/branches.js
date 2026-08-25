@@ -25,6 +25,8 @@ router.get('/', requireAuth, requirePermission('branch.view'), async (req, res) 
       team_id = '',
       team_member_id = '',
       pending_billable = '',
+      from_date = '',
+      to_date = '',
       sortBy = 'id',
       sortOrder = 'desc'
     } = req.query;
@@ -70,6 +72,21 @@ router.get('/', requireAuth, requirePermission('branch.view'), async (req, res) 
     // Filter by Team Member: show branches whose MFI is assigned to the selected member
     if (team_member_id) {
       query = query.andWhere('mfi.team_member_id', team_member_id);
+    }
+
+    // Filter by Software Start Date range (From Date / To Date)
+    if (from_date && from_date.trim()) {
+      const parsedFrom = dayjs(from_date.trim());
+      if (parsedFrom.isValid()) {
+        query = query.andWhere(db.raw('DATE(branches.software_start_date) >= ?', [parsedFrom.format('YYYY-MM-DD')]));
+      }
+    }
+
+    if (to_date && to_date.trim()) {
+      const parsedTo = dayjs(to_date.trim());
+      if (parsedTo.isValid()) {
+        query = query.andWhere(db.raw('DATE(branches.software_start_date) <= ?', [parsedTo.format('YYYY-MM-DD')]));
+      }
     }
 
     const validSortCols = ['id', 'branch_name', 'branch_code', 'branch_opening_date', 'software_start_date', 'billable_month', 'branch_type', 'status'];
@@ -121,7 +138,7 @@ router.get('/', requireAuth, requirePermission('branch.view'), async (req, res) 
  */
 router.get('/export', requireAuth, requirePermission('report.export'), async (req, res) => {
   try {
-    const { format = 'xlsx', search = '', mfi_id = '', branch_type = '', status = '' } = req.query;
+    const { format = 'xlsx', search = '', mfi_id = '', branch_type = '', status = '', team_id = '', team_member_id = '', pending_billable = '', from_date = '', to_date = '' } = req.query;
 
     let query = db('branches')
       .join('mfi', 'branches.mfi_id', 'mfi.id')
@@ -146,6 +163,16 @@ router.get('/export', requireAuth, requirePermission('report.export'), async (re
     if (mfi_id) query = query.andWhere('branches.mfi_id', mfi_id);
     if (branch_type) query = query.andWhere('branches.branch_type', branch_type);
     if (status) query = query.andWhere('branches.status', status);
+    if (team_id) query = query.andWhere('mfi.team_id', team_id);
+    if (team_member_id) query = query.andWhere('mfi.team_member_id', team_member_id);
+    if (from_date && from_date.trim()) {
+      const pFrom = dayjs(from_date.trim());
+      if (pFrom.isValid()) query = query.andWhere(db.raw('DATE(branches.software_start_date) >= ?', [pFrom.format('YYYY-MM-DD')]));
+    }
+    if (to_date && to_date.trim()) {
+      const pTo = dayjs(to_date.trim());
+      if (pTo.isValid()) query = query.andWhere(db.raw('DATE(branches.software_start_date) <= ?', [pTo.format('YYYY-MM-DD')]));
+    }
 
     const branches = await query;
 

@@ -16,6 +16,7 @@ const userRoutes = require('./src/routes/users');
 const roleRoutes = require('./src/routes/roles');
 const auditLogRoutes = require('./src/routes/auditLogs');
 const reportRoutes = require('./src/routes/reports');
+const migrationRoutes = require('./src/routes/migration');
 const { requireAuth, requireGuest } = require('./src/middleware/auth');
 
 const app = express();
@@ -89,7 +90,7 @@ app.get(['/agreements', '/agreements/create', '/agreements/:id/edit'], requireAu
 });
 
 // Administration pages
-app.get(['/users', '/roles', '/audit-logs'], requireAuth, (req, res) => {
+app.get(['/users', '/roles', '/audit-logs', '/migration'], requireAuth, (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
@@ -111,6 +112,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/roles', roleRoutes);
 app.use('/api/audit-logs', auditLogRoutes);
 app.use('/api/reports', reportRoutes);
+app.use('/api/migration', migrationRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

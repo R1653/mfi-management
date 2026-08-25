@@ -59,21 +59,24 @@ exports.seed = async function(knex) {
 
     // Reports
     { id: 23, name: 'report.view', module: 'report', action: 'view' },
-    { id: 24, name: 'report.export', module: 'report', action: 'export' }
+    { id: 24, name: 'report.export', module: 'report', action: 'export' },
+
+    // Migration
+    { id: 25, name: 'migration.import', module: 'migration', action: 'import' }
   ];
 
   await knex('permissions').insert(permissionsList);
 
   // 3. Assign Role Permissions
-  // Super Admin: All Permissions (1 to 24)
+  // Super Admin: All Permissions (1 to 25)
   const superAdminRolePerms = permissionsList.map(p => ({ role_id: 1, permission_id: p.id }));
 
   // Admin: All except role.manage and hard delete permissions
-  const adminPermIds = [1, 2, 3, 4, 6, 7, 8, 9, 11, 12, 13, 14, 16, 17, 18, 20, 22, 23, 24];
+  const adminPermIds = [1, 2, 3, 4, 6, 7, 8, 9, 11, 12, 13, 14, 16, 17, 18, 20, 22, 23, 24, 25];
   const adminRolePerms = adminPermIds.map(id => ({ role_id: 2, permission_id: id }));
 
-  // MFI Manager: MFI, Branch, Agreement, Reports
-  const managerPermIds = [1, 2, 3, 4, 6, 7, 8, 9, 11, 12, 13, 14, 23, 24];
+  // MFI Manager: MFI, Branch, Agreement, Reports, Migration
+  const managerPermIds = [1, 2, 3, 4, 6, 7, 8, 9, 11, 12, 13, 14, 23, 24, 25];
   const managerRolePerms = managerPermIds.map(id => ({ role_id: 3, permission_id: id }));
 
   // Viewer: Read-only views

@@ -8,8 +8,14 @@ function requireAuth(req, res, next) {
     return next();
   }
 
+  const isApi = (req.originalUrl && req.originalUrl.startsWith('/api/')) ||
+                (req.baseUrl && req.baseUrl.startsWith('/api/')) ||
+                (req.path && req.path.startsWith('/api/')) ||
+                req.xhr ||
+                req.headers.accept?.includes('application/json');
+
   // Check if API request or HTML page request
-  if (req.path.startsWith('/api/') || req.xhr || req.headers.accept?.includes('application/json')) {
+  if (isApi) {
     return res.status(401).json({
       success: false,
       message: 'Authentication required. Please sign in to continue.'

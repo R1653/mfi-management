@@ -18,6 +18,18 @@ const UI = {
     const container = document.getElementById('toast-container');
     if (!container) return;
 
+    if (message && (
+      message.toLowerCase().includes('forbidden') ||
+      message.toLowerCase().includes('permission') ||
+      message.toLowerCase().includes('privilege') ||
+      message.toLowerCase().includes('not possess') ||
+      message.toLowerCase().includes('access denied') ||
+      message.toLowerCase().includes('unexpected token')
+    )) {
+      message = 'You are not a privileged user to perform this action.';
+      if (type === 'danger') title = 'Access Denied';
+    }
+
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
 
@@ -45,6 +57,12 @@ const UI = {
       toast.style.transform = 'translateX(100%)';
       setTimeout(() => toast.remove(), 250);
     }, 4000);
+  },
+
+  showToast(message, type = 'info') {
+    const toastType = type === 'error' ? 'danger' : type;
+    const title = toastType === 'danger' ? 'Error' : (toastType === 'success' ? 'Success' : 'Notification');
+    UI.toast(toastType, title, message);
   },
 
   confirm(message, onConfirm, { title = 'Please Confirm Action', confirmText = 'Confirm', isDanger = false } = {}) {
@@ -96,6 +114,40 @@ const UI = {
   formatCurrency(val) {
     const num = parseFloat(val || 0);
     return num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  },
+
+  async parseResponse(res) {
+    const contentType = res.headers.get('content-type') || '';
+    let data = {};
+    if (contentType.includes('application/json')) {
+      try {
+        data = await res.json();
+      } catch (e) {
+        data = {};
+      }
+    } else {
+      const text = await res.text();
+      data = { message: text };
+    }
+
+    if (!res.ok) {
+      if (res.status === 403 || (data && data.message && (
+        data.message.toLowerCase().includes('forbidden') ||
+        data.message.toLowerCase().includes('permission') ||
+        data.message.toLowerCase().includes('privilege') ||
+        data.message.toLowerCase().includes('not possess') ||
+        data.message.toLowerCase().includes('access denied')
+      ))) {
+        throw new Error('You are not a privileged user to perform this action.');
+      }
+      if (res.status === 401) {
+        throw new Error('Authentication required. Please sign in to continue.');
+      }
+      const msg = (data && data.message && !data.message.includes('<!DOCTYPE')) ? data.message : `Request failed with status ${res.status}`;
+      throw new Error(msg);
+    }
+
+    return data;
   },
 
   formatDate(val) {
@@ -376,6 +428,9 @@ class Router {
       } else if (path === '/audit-logs') {
         Router.updateBreadcrumbs(['Home', 'Administration', 'User Audit Trail']);
         await AuditLogsView.render(viewport);
+      } else if (path === '/migration') {
+        Router.updateBreadcrumbs(['Home', 'Administration', 'Data Migration']);
+        await MigrationView.render(viewport);
       } else if (path.startsWith('/reports/')) {
         const repType = path.split('/')[2];
         Router.updateBreadcrumbs(['Home', 'Reports', repType.replace('-', ' ').toUpperCase()]);
@@ -2488,8 +2543,7 @@ const MfiProfileView = {
       async () => {
         try {
           const res = await fetch(`/api/branches/${branchId}`, { method: 'DELETE' });
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.message);
+          const data = await UI.parseResponse(res);
           UI.toast('success', 'Branch Deleted', data.message);
           Router.handleRoute();
         } catch (err) {
@@ -2505,7 +2559,7 @@ const MfiProfileView = {
 // 5. BRANCH MODULE VIEWS (List, Form)
 // ==========================================
 const BranchListView = {
-  state: { page: 1, limit: 10, search: '', mfi_id: '', branch_type: '', status: '', team_id: '', team_member_id: '', pending_billable: '' },
+  state: { page: 1, limit: 10, search: '', mfi_id: '', branch_type: '', status: '', team_id: '', team_member_id: '', pending_billable: '', from_date: '', to_date: '' },
 
   async render(container) {
     // Fetch MFIs for dropdown filter
@@ -2537,6 +2591,11 @@ const BranchListView = {
     if (urlParams.get('team_id')) BranchListView.state.team_id = urlParams.get('team_id');
     if (urlParams.get('team_member_id')) BranchListView.state.team_member_id = urlParams.get('team_member_id');
     if (urlParams.get('pending_billable')) BranchListView.state.pending_billable = urlParams.get('pending_billable');
+    if (urlParams.get('from_date')) BranchListView.state.from_date = urlParams.get('from_date');
+    if (urlParams.get('to_date')) BranchListView.state.to_date = urlParams.get('to_date');
+
+    const hasAdvancedActive = BranchListView.state.team_id || BranchListView.state.team_member_id || BranchListView.state.pending_billable === '1' || BranchListView.state.from_date || BranchListView.state.to_date;
+    const activeAdvCount = [BranchListView.state.team_id, BranchListView.state.team_member_id, BranchListView.state.pending_billable === '1' ? '1' : '', BranchListView.state.from_date, BranchListView.state.to_date].filter(Boolean).length;
 
     container.innerHTML = `
       <div class="page-header">
@@ -2586,11 +2645,11 @@ const BranchListView = {
           </select>
 
           <!-- Advanced Filters toggle button -->
-          <button id="branch-adv-toggle-btn" onclick="BranchListView.toggleAdvanced()" style="display:inline-flex; align-items:center; gap:6px; padding:7px 13px; border-radius:6px; border:1.5px solid ${(BranchListView.state.team_id || BranchListView.state.team_member_id || BranchListView.state.pending_billable === '1') ? 'var(--primary,#1a56db)' : 'var(--border-color,#e2e8f0)'}; background:${(BranchListView.state.team_id || BranchListView.state.team_member_id || BranchListView.state.pending_billable === '1') ? 'rgba(26,86,219,0.07)' : '#fff'}; font-size:13px; font-weight:500; color:${(BranchListView.state.team_id || BranchListView.state.team_member_id || BranchListView.state.pending_billable === '1') ? 'var(--primary,#1a56db)' : 'var(--text-muted,#64748b)'}; cursor:pointer; transition:all 0.2s;" title="Toggle advanced filters">
+          <button id="branch-adv-toggle-btn" onclick="BranchListView.toggleAdvanced()" style="display:inline-flex; align-items:center; gap:6px; padding:7px 13px; border-radius:6px; border:1.5px solid ${hasAdvancedActive ? 'var(--primary,#1a56db)' : 'var(--border-color,#e2e8f0)'}; background:${hasAdvancedActive ? 'rgba(26,86,219,0.07)' : '#fff'}; font-size:13px; font-weight:500; color:${hasAdvancedActive ? 'var(--primary,#1a56db)' : 'var(--text-muted,#64748b)'}; cursor:pointer; transition:all 0.2s;" title="Toggle advanced filters">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/></svg>
             Advanced Filters
-            ${(BranchListView.state.team_id || BranchListView.state.team_member_id || BranchListView.state.pending_billable === '1')
-              ? `<span style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:var(--primary,#1a56db);color:#fff;font-size:10px;font-weight:700;">${[BranchListView.state.team_id, BranchListView.state.team_member_id, BranchListView.state.pending_billable === '1' ? '1' : ''].filter(Boolean).length}</span>`
+            ${hasAdvancedActive
+              ? `<span style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:var(--primary,#1a56db);color:#fff;font-size:10px;font-weight:700;">${activeAdvCount}</span>`
               : ''}
           </button>
 
@@ -2599,10 +2658,10 @@ const BranchListView = {
         </div>
 
         <!-- Row 2: Advanced filters — hidden by default, revealed by toggle -->
-        <div id="branch-advanced-panel" style="display:${(BranchListView.state.team_id || BranchListView.state.team_member_id || BranchListView.state.pending_billable === '1') ? 'flex' : 'none'}; flex-wrap:wrap; align-items:center; gap:10px; margin-top:10px; padding:12px 14px; background:#f8fafc; border:1px solid var(--border-color,#e2e8f0); border-radius:8px; animation: fadeIn 0.18s ease;">
+        <div id="branch-advanced-panel" style="display:${hasAdvancedActive ? 'flex' : 'none'}; flex-wrap:wrap; align-items:center; gap:10px; margin-top:10px; padding:12px 14px; background:#f8fafc; border:1px solid var(--border-color,#e2e8f0); border-radius:8px; animation: fadeIn 0.18s ease;">
           <span style="font-size:12px; font-weight:600; color:var(--text-muted,#64748b); text-transform:uppercase; letter-spacing:0.5px; margin-right:4px;">Advanced:</span>
 
-          <select id="branch-team-filter" class="form-select" style="width: 200px;">
+          <select id="branch-team-filter" class="form-select" style="width: 180px;">
             <option value="">All Teams</option>
             ${assignedTeams.length === 0
               ? '<option disabled>— No teams assigned to any MFI —</option>'
@@ -2610,7 +2669,7 @@ const BranchListView = {
             }
           </select>
 
-          <select id="branch-member-filter" class="form-select" style="width: 220px;">
+          <select id="branch-member-filter" class="form-select" style="width: 200px;">
             <option value="">All Team Members</option>
             ${assignedMembers.length === 0
               ? '<option disabled>— No members linked to branches —</option>'
@@ -2624,6 +2683,16 @@ const BranchListView = {
             Pending Billable Branch
             <span style="font-size:10px; opacity:0.7; font-weight:400;">(Branch Office only)</span>
           </label>
+
+          <div style="display:inline-flex; align-items:center; gap:6px; background:#fff; padding:4px 8px; border:1px solid var(--border-color,#e2e8f0); border-radius:6px;">
+            <span style="font-size:12px; font-weight:600; color:var(--text-secondary,#475569);">From:</span>
+            <input type="date" id="branch-from-date" class="form-control" style="width: 135px; padding: 4px 6px; font-size: 12px;" value="${BranchListView.state.from_date}" title="Software Start Date From">
+          </div>
+
+          <div style="display:inline-flex; align-items:center; gap:6px; background:#fff; padding:4px 8px; border:1px solid var(--border-color,#e2e8f0); border-radius:6px;">
+            <span style="font-size:12px; font-weight:600; color:var(--text-secondary,#475569);">To:</span>
+            <input type="date" id="branch-to-date" class="form-control" style="width: 135px; padding: 4px 6px; font-size: 12px;" value="${BranchListView.state.to_date}" title="Software Start Date To">
+          </div>
         </div>
       </div>
 
@@ -2657,6 +2726,13 @@ const BranchListView = {
       if (e.key === 'Enter') BranchListView.applyFilters();
     });
 
+    ['branch-mfi-filter', 'branch-type-filter', 'branch-status-filter', 'branch-team-filter', 'branch-member-filter', 'branch-from-date', 'branch-to-date'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.addEventListener('change', () => BranchListView.applyFilters());
+      }
+    });
+
     // Pending billable toggle visual feedback
     const pendingCheckbox = document.getElementById('branch-pending-billable');
     const pendingLabel = document.getElementById('branch-pending-billable-toggle');
@@ -2666,6 +2742,7 @@ const BranchListView = {
         pendingLabel.style.borderColor = checked ? 'var(--warning,#d97706)' : 'var(--border-color,#e2e8f0)';
         pendingLabel.style.background = checked ? 'rgba(217,119,6,0.08)' : '#fff';
         pendingLabel.style.color = checked ? 'var(--warning,#d97706)' : 'var(--text-secondary,#475569)';
+        BranchListView.applyFilters();
       });
       pendingLabel.addEventListener('click', () => {
         pendingCheckbox.checked = !pendingCheckbox.checked;
@@ -2683,7 +2760,7 @@ const BranchListView = {
     panel.style.display = isVisible ? 'none' : 'flex';
     const btn = document.getElementById('branch-adv-toggle-btn');
     if (btn) {
-      const hasActive = BranchListView.state.team_id || BranchListView.state.team_member_id || BranchListView.state.pending_billable === '1';
+      const hasActive = BranchListView.state.team_id || BranchListView.state.team_member_id || BranchListView.state.pending_billable === '1' || BranchListView.state.from_date || BranchListView.state.to_date;
       btn.style.borderColor = (hasActive || !isVisible) ? 'var(--primary,#1a56db)' : 'var(--border-color,#e2e8f0)';
       btn.style.background = (hasActive || !isVisible) ? 'rgba(26,86,219,0.07)' : '#fff';
       btn.style.color = (hasActive || !isVisible) ? 'var(--primary,#1a56db)' : 'var(--text-muted,#64748b)';
@@ -2691,8 +2768,8 @@ const BranchListView = {
   },
 
   async fetchData() {
-    const { page, limit, search, mfi_id, branch_type, status, team_id, team_member_id, pending_billable } = BranchListView.state;
-    const url = `/api/branches?page=${page}&limit=${limit}&search=${encodeURIComponent(search)}&mfi_id=${encodeURIComponent(mfi_id)}&branch_type=${encodeURIComponent(branch_type)}&status=${encodeURIComponent(status)}&team_id=${encodeURIComponent(team_id)}&team_member_id=${encodeURIComponent(team_member_id)}&pending_billable=${encodeURIComponent(pending_billable)}`;
+    const { page, limit, search, mfi_id, branch_type, status, team_id, team_member_id, pending_billable, from_date, to_date } = BranchListView.state;
+    const url = `/api/branches?page=${page}&limit=${limit}&search=${encodeURIComponent(search)}&mfi_id=${encodeURIComponent(mfi_id)}&branch_type=${encodeURIComponent(branch_type)}&status=${encodeURIComponent(status)}&team_id=${encodeURIComponent(team_id)}&team_member_id=${encodeURIComponent(team_member_id)}&pending_billable=${encodeURIComponent(pending_billable)}&from_date=${encodeURIComponent(from_date)}&to_date=${encodeURIComponent(to_date)}`;
     const res = await fetch(url);
     const result = await res.json();
 
@@ -2764,6 +2841,10 @@ const BranchListView = {
     BranchListView.state.team_id = document.getElementById('branch-team-filter').value;
     BranchListView.state.team_member_id = document.getElementById('branch-member-filter').value;
     BranchListView.state.pending_billable = document.getElementById('branch-pending-billable').checked ? '1' : '';
+    const fromEl = document.getElementById('branch-from-date');
+    BranchListView.state.from_date = fromEl ? fromEl.value : '';
+    const toEl = document.getElementById('branch-to-date');
+    BranchListView.state.to_date = toEl ? toEl.value : '';
     BranchListView.state.page = 1;
     BranchListView.fetchData();
   },
@@ -2779,7 +2860,11 @@ const BranchListView = {
     if (memberFilter) memberFilter.value = '';
     const pendingCb = document.getElementById('branch-pending-billable');
     if (pendingCb) { pendingCb.checked = false; pendingCb.dispatchEvent(new Event('change')); }
-    BranchListView.state = { page: 1, limit: 10, search: '', mfi_id: '', branch_type: '', status: '', team_id: '', team_member_id: '', pending_billable: '' };
+    const fromEl = document.getElementById('branch-from-date');
+    if (fromEl) fromEl.value = '';
+    const toEl = document.getElementById('branch-to-date');
+    if (toEl) toEl.value = '';
+    BranchListView.state = { page: 1, limit: 10, search: '', mfi_id: '', branch_type: '', status: '', team_id: '', team_member_id: '', pending_billable: '', from_date: '', to_date: '' };
     BranchListView.fetchData();
   },
 
@@ -2816,8 +2901,7 @@ const BranchListView = {
       async () => {
         try {
           const res = await fetch(`/api/branches/${id}`, { method: 'DELETE' });
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.message);
+          const data = await UI.parseResponse(res);
           UI.toast('success', 'Branch Deleted', data.message);
           BranchListView.fetchData();
         } catch (err) {
@@ -2829,8 +2913,8 @@ const BranchListView = {
   },
 
   export(format) {
-    const { search, mfi_id, branch_type, status, team_id, team_member_id, pending_billable } = BranchListView.state;
-    window.open(`/api/branches/export?format=${format}&search=${encodeURIComponent(search)}&mfi_id=${encodeURIComponent(mfi_id)}&branch_type=${encodeURIComponent(branch_type)}&status=${encodeURIComponent(status)}&team_id=${encodeURIComponent(team_id)}&team_member_id=${encodeURIComponent(team_member_id)}&pending_billable=${encodeURIComponent(pending_billable)}`, '_blank');
+    const { search, mfi_id, branch_type, status, team_id, team_member_id, pending_billable, from_date, to_date } = BranchListView.state;
+    window.open(`/api/branches/export?format=${format}&search=${encodeURIComponent(search)}&mfi_id=${encodeURIComponent(mfi_id)}&branch_type=${encodeURIComponent(branch_type)}&status=${encodeURIComponent(status)}&team_id=${encodeURIComponent(team_id)}&team_member_id=${encodeURIComponent(team_member_id)}&pending_billable=${encodeURIComponent(pending_billable)}&from_date=${encodeURIComponent(from_date)}&to_date=${encodeURIComponent(to_date)}`, '_blank');
   }
 };
 
@@ -3114,35 +3198,40 @@ const BranchFormView = {
     if (!input || !menu) return;
 
     let debounceTimer;
+
+    const doSearch = async () => {
+      const q = input.value.trim();
+      try {
+        const res = await fetch(`/api/mfis/autocomplete?q=${encodeURIComponent(q)}`);
+        const data = await res.json();
+        const matches = data.data || [];
+
+        if (matches.length === 0) {
+          menu.innerHTML = '<div class="autocomplete-empty">No matching MFI found</div>';
+        } else {
+          menu.innerHTML = matches.map(m => `
+            <div class="autocomplete-item" data-id="${m.id}" data-grace="${m.om_grace_period_months ?? 0}" data-name="${m.short_name} — ${m.full_name}">
+              <div style="font-weight: 600; color: var(--primary);">${m.short_name}</div>
+              <div style="font-size: 11px; color: var(--text-muted);">${m.full_name}</div>
+            </div>
+          `).join('');
+        }
+        menu.classList.add('show');
+      } catch (err) {
+        console.error('Autocomplete fetch error:', err);
+      }
+    };
+
     input.addEventListener('input', () => {
       clearTimeout(debounceTimer);
-      const q = input.value.trim();
-      if (q.length < 1) {
-        menu.classList.remove('show');
-        return;
+      if (!input.value.trim()) {
+        hiddenId.value = '';
       }
+      debounceTimer = setTimeout(doSearch, 200);
+    });
 
-      debounceTimer = setTimeout(async () => {
-        try {
-          const res = await fetch(`/api/mfis/autocomplete?q=${encodeURIComponent(q)}`);
-          const data = await res.json();
-          const matches = data.data || [];
-
-          if (matches.length === 0) {
-            menu.innerHTML = '<div class="autocomplete-empty">No matching MFI found</div>';
-          } else {
-            menu.innerHTML = matches.map(m => `
-              <div class="autocomplete-item" data-id="${m.id}" data-grace="${m.om_grace_period_months ?? 0}" data-name="${m.short_name} — ${m.full_name}">
-                <div style="font-weight: 600; color: var(--primary);">${m.short_name}</div>
-                <div style="font-size: 11px; color: var(--text-muted);">${m.full_name}</div>
-              </div>
-            `).join('');
-          }
-          menu.classList.add('show');
-        } catch (err) {
-          console.error('Autocomplete fetch error:', err);
-        }
-      }, 300);
+    input.addEventListener('focus', () => {
+      doSearch();
     });
 
     menu.addEventListener('click', (e) => {
@@ -3154,7 +3243,6 @@ const BranchFormView = {
       input.value = item.dataset.name;
       input.classList.remove('is-invalid');
       menu.classList.remove('show');
-      // Recompute billable month after MFI selection
       BranchFormView.recomputeBillableMonth(false);
     });
 
@@ -3241,14 +3329,8 @@ const AgreementListView = {
       <div class="page-header">
         <div>
           <h1 class="page-title">Agreement & Renewal Management</h1>
-          <p class="page-subtitle">Historical support agreements, fee schedules, and upcoming renewal pipelines</p>
         </div>
         <div class="page-actions">
-          <div class="btn-group">
-            <button class="btn btn-secondary" onclick="AgreementListView.export('xlsx')">Excel</button>
-            <button class="btn btn-secondary" onclick="AgreementListView.export('csv')">CSV</button>
-            <button class="btn btn-secondary" onclick="AgreementListView.export('pdf')">PDF</button>
-          </div>
           <a href="/agreements/create" class="btn btn-primary">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             <span>Add Renewal Agreement</span>
@@ -3692,30 +3774,41 @@ const AgreementFormView = {
 
     if (!input || !menu) return;
 
+    let debounceTimer;
+
+    const doSearch = async () => {
+      const q = input.value.trim();
+      try {
+        const res = await fetch(`/api/mfis/autocomplete?q=${encodeURIComponent(q)}`);
+        const data = await res.json();
+        const matches = data.data || [];
+
+        if (matches.length === 0) {
+          menu.innerHTML = '<div class="autocomplete-empty">No matching MFI found</div>';
+        } else {
+          menu.innerHTML = matches.map(m => `
+            <div class="autocomplete-item" data-id="${m.id}" data-name="${m.short_name} — ${m.full_name}">
+              <div style="font-weight: 600; color: var(--primary);">${m.short_name}</div>
+              <div style="font-size: 11px; color: var(--text-muted);">${m.full_name}</div>
+            </div>
+          `).join('');
+        }
+        menu.classList.add('show');
+      } catch (err) {
+        console.error('Autocomplete fetch error:', err);
+      }
+    };
+
     input.addEventListener('input', () => {
-      const q = input.value.trim().toLowerCase();
-      if (!q) {
-        menu.classList.remove('open');
-        return;
+      clearTimeout(debounceTimer);
+      if (!input.value.trim()) {
+        hiddenId.value = '';
       }
+      debounceTimer = setTimeout(doSearch, 200);
+    });
 
-      const matches = mfis.filter(m => 
-        m.short_name.toLowerCase().includes(q) || 
-        m.full_name.toLowerCase().includes(q)
-      ).slice(0, 8);
-
-      if (matches.length === 0) {
-        menu.innerHTML = '<div class="autocomplete-empty">No matching MFI found</div>';
-      } else {
-        menu.innerHTML = matches.map(m => `
-          <div class="autocomplete-item" data-id="${m.id}" data-name="${m.short_name} — ${m.full_name}">
-            <div style="font-weight: 600; color: var(--primary);">${m.short_name}</div>
-            <div style="font-size: 11px; color: var(--text-muted);">${m.full_name}</div>
-          </div>
-        `).join('');
-      }
-
-      menu.classList.add('open');
+    input.addEventListener('focus', () => {
+      doSearch();
     });
 
     menu.addEventListener('click', (e) => {
@@ -3725,12 +3818,12 @@ const AgreementFormView = {
       hiddenId.value = item.dataset.id;
       input.value = item.dataset.name;
       input.classList.remove('is-invalid');
-      menu.classList.remove('open');
+      menu.classList.remove('show');
     });
 
     document.addEventListener('click', (e) => {
       if (!input.contains(e.target) && !menu.contains(e.target)) {
-        menu.classList.remove('open');
+        menu.classList.remove('show');
       }
     });
   }
@@ -3898,16 +3991,17 @@ const UsersView = {
       <form id="modal-user-form">
         <div class="form-group">
           <label class="form-label" for="modal_user_name">Full Name <span class="required-star">*</span></label>
-          <input type="text" id="modal_user_name" class="form-control" required placeholder="e.g. John Doe">
+          <input type="text" id="modal_user_name" class="form-control" required placeholder="Full Name">
         </div>
         <div class="form-grid-2">
           <div class="form-group">
             <label class="form-label" for="modal_user_login">Login ID <span class="required-star">*</span></label>
-            <input type="text" id="modal_user_login" class="form-control" required placeholder="e.g. jdoe">
+            <input type="text" id="modal_user_login" class="form-control" required placeholder="User ID" autocomplete="off">
           </div>
           <div class="form-group">
             <label class="form-label" for="modal_user_role">Role <span class="required-star">*</span></label>
-            <select id="modal_user_role" class="form-select">
+            <select id="modal_user_role" class="form-select" required>
+              <option value="" disabled selected>Select Role</option>
               ${roles.map(r => `<option value="${r.id}">${r.name}</option>`).join('')}
             </select>
           </div>
@@ -3915,7 +4009,7 @@ const UsersView = {
         <div class="form-grid-2">
           <div class="form-group">
             <label class="form-label" for="modal_user_email">Email</label>
-            <input type="email" id="modal_user_email" class="form-control" placeholder="jdoe@example.com">
+            <input type="email" id="modal_user_email" class="form-control" placeholder="email@gmail.com">
           </div>
           <div class="form-group">
             <label class="form-label" for="modal_user_mobile">Mobile Number</label>
@@ -3925,11 +4019,11 @@ const UsersView = {
         <div class="form-grid-2">
           <div class="form-group">
             <label class="form-label" for="modal_user_pass">Password <span class="required-star">*</span></label>
-            <input type="password" id="modal_user_pass" class="form-control" required minlength="6" placeholder="••••••••">
+            <input type="password" id="modal_user_pass" class="form-control" required minlength="6" placeholder="••••••••" autocomplete="new-password">
           </div>
           <div class="form-group">
             <label class="form-label" for="modal_user_pass_confirm">Confirm Password <span class="required-star">*</span></label>
-            <input type="password" id="modal_user_pass_confirm" class="form-control" required minlength="6" placeholder="••••••••">
+            <input type="password" id="modal_user_pass_confirm" class="form-control" required minlength="6" placeholder="••••••••" autocomplete="new-password">
           </div>
         </div>
       </form>
@@ -3951,8 +4045,8 @@ const UsersView = {
       const password = document.getElementById('modal_user_pass').value;
       const confirm_password = document.getElementById('modal_user_pass_confirm').value;
 
-      if (!name || !login_id || !password) {
-        UI.toast('danger', 'Validation', 'Name, Login ID, and Password are required.');
+      if (!name || !login_id || !role_id || !password) {
+        UI.toast('danger', 'Validation', 'Name, Login ID, Role, and Password are required.');
         return;
       }
 
@@ -4722,6 +4816,474 @@ const ReportsView = {
     `;
   }
 };
+
+// ==========================================
+// 9. DATA MIGRATION VIEW MODULE
+// ==========================================
+const MigrationView = {
+  activeTab: 'mfi', // 'mfi' or 'branch'
+  parsedData: null,
+  validationResult: null,
+
+  async render(container) {
+    if (!UI.can('migration.import')) {
+      container.innerHTML = UI.renderAccessDenied('You do not have permission to access the Data Migration module.');
+      return;
+    }
+
+    MigrationView.parsedData = null;
+    MigrationView.validationResult = null;
+
+    container.innerHTML = `
+      <div class="page-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px; margin-bottom:24px;">
+        <div>
+          <h1 class="page-title" style="font-size: 24px; font-weight: 700; color: var(--text-primary); margin:0;">Data Migration Hub</h1>
+          <p class="page-subtitle" style="font-size: 13px; color: var(--text-muted); margin-top:4px;">Download database templates, validate CSV/Excel data, and batch import MFI & Branch records.</p>
+        </div>
+      </div>
+
+      <!-- Tab Navigation -->
+      <div style="display:flex; gap:12px; border-bottom: 2px solid var(--border-color, #e2e8f0); margin-bottom: 24px;">
+        <button class="tab-btn ${MigrationView.activeTab === 'mfi' ? 'active' : ''}" id="tab-btn-mfi" onclick="MigrationView.switchTab('mfi')" style="padding:10px 20px; font-weight:600; background:none; border:none; border-bottom: 3px solid ${MigrationView.activeTab === 'mfi' ? 'var(--primary, #1a56db)' : 'transparent'}; color: ${MigrationView.activeTab === 'mfi' ? 'var(--primary, #1a56db)' : 'var(--text-secondary, #475569)'}; cursor:pointer;">
+          🏦 MFI Migration
+        </button>
+        <button class="tab-btn ${MigrationView.activeTab === 'branch' ? 'active' : ''}" id="tab-btn-branch" onclick="MigrationView.switchTab('branch')" style="padding:10px 20px; font-weight:600; background:none; border:none; border-bottom: 3px solid ${MigrationView.activeTab === 'branch' ? 'var(--primary, #1a56db)' : 'transparent'}; color: ${MigrationView.activeTab === 'branch' ? 'var(--primary, #1a56db)' : 'var(--text-secondary, #475569)'}; cursor:pointer;">
+          🏢 Branch Office Migration
+        </button>
+      </div>
+
+      <!-- Main Content Container -->
+      <div id="migration-panel-content">
+        ${MigrationView.renderTabContent()}
+      </div>
+    `;
+
+    MigrationView.bindEvents();
+  },
+
+  switchTab(tab) {
+    MigrationView.activeTab = tab;
+    MigrationView.parsedData = null;
+    MigrationView.validationResult = null;
+    
+    document.getElementById('tab-btn-mfi').style.borderBottomColor = tab === 'mfi' ? 'var(--primary, #1a56db)' : 'transparent';
+    document.getElementById('tab-btn-mfi').style.color = tab === 'mfi' ? 'var(--primary, #1a56db)' : 'var(--text-secondary, #475569)';
+    
+    document.getElementById('tab-btn-branch').style.borderBottomColor = tab === 'branch' ? 'var(--primary, #1a56db)' : 'transparent';
+    document.getElementById('tab-btn-branch').style.color = tab === 'branch' ? 'var(--primary, #1a56db)' : 'var(--text-secondary, #475569)';
+
+    const panel = document.getElementById('migration-panel-content');
+    if (panel) {
+      panel.innerHTML = MigrationView.renderTabContent();
+      MigrationView.bindEvents();
+    }
+  },
+
+  renderTabContent() {
+    const isMfi = MigrationView.activeTab === 'mfi';
+    const typeLabel = isMfi ? 'MFI Master' : 'Branch Office';
+    const templateBaseUrl = isMfi ? '/api/migration/template/mfi' : '/api/migration/template/branch';
+
+    return `
+      <div class="card" style="margin-bottom:24px;">
+        <div class="card-header" style="display:flex; justify-content:space-between; align-items:center;">
+          <h3 class="card-title" style="font-size:16px; font-weight:700;">Step 1: Download ${typeLabel} Standard Template</h3>
+        </div>
+        <div class="card-body" style="padding:20px;">
+          <p style="font-size:13px; color:var(--text-secondary); margin-bottom:16px;">
+            Download pre-formatted data entry template aligned with database schema constraints. Fill in row details and preserve column header titles.
+          </p>
+          <div style="display:flex; gap:12px; flex-wrap:wrap;">
+            <button onclick="MigrationView.downloadTemplate('${MigrationView.activeTab}', 'xlsx')" class="btn btn-primary" style="display:inline-flex; align-items:center; gap:8px; cursor:pointer;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Download Excel Template (.xlsx)
+            </button>
+            <button onclick="MigrationView.downloadTemplate('${MigrationView.activeTab}', 'csv')" class="btn btn-secondary" style="display:inline-flex; align-items:center; gap:8px; cursor:pointer;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Download CSV Template (.csv)
+            </button>
+          </div>
+          <div style="margin-top:16px; padding:12px 16px; background:rgba(26,86,219,0.04); border-left:4px solid var(--primary, #1a56db); border-radius:4px; font-size:12px; color:var(--text-secondary);">
+            <strong>Schema Requirements:</strong><br>
+            ${isMfi ? `
+              • <strong>Full Name *</strong>: Official MFI organization title.<br>
+              • <strong>Short Name *</strong>: Unique short identifier code (e.g. SSS, ASA, BURO).<br>
+              • <strong>Initial Agreement Date *</strong>: Format YYYY-MM-DD.<br>
+              • <strong>Agreement Expire Date</strong>: Optional, format YYYY-MM-DD.<br>
+              • <strong>Initial License & O&M Fees</strong>: Numeric values.<br>
+              • <em>Note: Importing an MFI automatically generates its initial agreement record.</em>
+            ` : `
+              • <strong>MFI Short Name *</strong>: Must match an existing MFI short name in system.<br>
+              • <strong>Branch Name * & Code *</strong>: Code must be unique per MFI.<br>
+              • <strong>Software Start Date *</strong>: Format YYYY-MM-DD.<br>
+              • <strong>Billable Month</strong>: Optional (Format YYYY-MM). If empty, auto-computed from software start date + MFI grace period.<br>
+              • <strong>Branch Type</strong>: Branch Office, Area Office, or Zone Office.
+            `}
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 2: Upload File -->
+      <div class="card" style="margin-bottom:24px;">
+        <div class="card-header">
+          <h3 class="card-title" style="font-size:16px; font-weight:700;">Step 2: Upload Populated ${typeLabel} Migration File</h3>
+        </div>
+        <div class="card-body" style="padding:24px;">
+          <div id="dropzone" style="border: 2px dashed var(--border-color, #cbd5e1); border-radius: 8px; padding: 36px 20px; text-align: center; background: #f8fafc; cursor: pointer; transition: all 0.2s ease;">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--primary, #1a56db)" stroke-width="2" style="margin-bottom:12px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            <h4 style="font-size:15px; font-weight:600; color:var(--text-primary); margin-bottom:4px;">Drag and Drop your CSV or Excel file here</h4>
+            <p style="font-size:12px; color:var(--text-muted); margin-bottom:16px;">Supports .csv or .xlsx formatted files</p>
+            <input type="file" id="migration-file-input" accept=".csv, .xlsx" style="display:none;">
+            <button class="btn btn-secondary btn-sm" onclick="document.getElementById('migration-file-input').click()">Browse Computer</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 3: Validation Preview Container -->
+      <div id="validation-report-container"></div>
+    `;
+  },
+
+  bindEvents() {
+    const fileInput = document.getElementById('migration-file-input');
+    const dropzone = document.getElementById('dropzone');
+
+    if (!fileInput || !dropzone) return;
+
+    dropzone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropzone.style.borderColor = 'var(--primary, #1a56db)';
+      dropzone.style.background = 'rgba(26,86,219,0.04)';
+    });
+
+    dropzone.addEventListener('dragleave', () => {
+      dropzone.style.borderColor = 'var(--border-color, #cbd5e1)';
+      dropzone.style.background = '#f8fafc';
+    });
+
+    dropzone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropzone.style.borderColor = 'var(--border-color, #cbd5e1)';
+      dropzone.style.background = '#f8fafc';
+      if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+        MigrationView.handleFileSelected(e.dataTransfer.files[0]);
+      }
+    });
+
+    fileInput.addEventListener('change', (e) => {
+      if (e.target.files && e.target.files[0]) {
+        MigrationView.handleFileSelected(e.target.files[0]);
+      }
+    });
+  },
+
+  async handleFileSelected(file) {
+    UI.toast('info', 'Processing File', `Uploading and validating ${file.name}...`);
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const base64Data = e.target.result.split(',')[1];
+        const isMfi = MigrationView.activeTab === 'mfi';
+        const endpoint = isMfi ? '/api/migration/validate/mfi' : '/api/migration/validate/branch';
+
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fileData: base64Data, fileName: file.name })
+        });
+
+        const result = await res.json();
+        if (!res.ok) {
+          throw new Error(result.message || 'Validation request failed.');
+        }
+
+        MigrationView.validationResult = result;
+        MigrationView.renderValidationReport(result);
+        UI.toast('success', 'Validation Complete', `Parsed ${result.total} records (${result.validCount} ready, ${result.invalidCount} errors).`);
+      } catch (err) {
+        console.error('File validation error:', err);
+        UI.toast('danger', 'Validation Error', err.message);
+      }
+    };
+    reader.onerror = () => {
+      UI.toast('danger', 'File Read Error', 'Failed to read file contents.');
+    };
+    reader.readAsDataURL(file);
+  },
+
+  parseCSVText(text) {
+    const lines = text.split(/\r\n|\n/).map(l => l.trim()).filter(l => l.length > 0);
+    if (lines.length < 2) return [];
+
+    const parseLine = (line) => {
+      const result = [];
+      let cur = '';
+      let inQuotes = false;
+      for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        if (char === '"') {
+          inQuotes = !inQuotes;
+        } else if (char === ',' && !inQuotes) {
+          result.push(cur.trim().replace(/^"|"$/g, ''));
+          cur = '';
+        } else {
+          cur += char;
+        }
+      }
+      result.push(cur.trim().replace(/^"|"$/g, ''));
+      return result;
+    };
+
+    const headers = parseLine(lines[0]).map(h => h.toLowerCase().replace(/[^a-z0-9_]/g, '_'));
+
+    const rows = [];
+    for (let i = 1; i < lines.length; i++) {
+      const values = parseLine(lines[i]);
+      if (values.length === 0 || (values.length === 1 && values[0] === '')) continue;
+
+      const rowObj = {};
+      headers.forEach((h, idx) => {
+        let key = h;
+        if (key.includes('mfi_short') || key.includes('mfi')) key = 'mfi_short_name';
+        else if (key.includes('full_name') || key.includes('full')) key = 'full_name';
+        else if (key.includes('short_name') || key.includes('short')) key = 'short_name';
+        else if (key.includes('branch_name')) key = 'branch_name';
+        else if (key.includes('branch_code') || key.includes('code')) key = 'branch_code';
+        else if (key.includes('establish')) key = 'establish_date';
+        else if (key.includes('initial_agreement') || key.includes('agreement_date')) key = 'initial_agreement_date';
+        else if (key.includes('expire')) key = 'agreement_expire_date';
+        else if (key.includes('license')) key = 'initial_license_fee';
+        else if (key.includes('om_fee') || key.includes('o_m_fee')) key = 'initial_om_fee';
+        else if (key.includes('branch_count') || key.includes('count')) key = 'initial_branch_count';
+        else if (key.includes('grace')) key = 'om_grace_period_months';
+        else if (key.includes('opening')) key = 'branch_opening_date';
+        else if (key.includes('software_start') || key.includes('software')) key = 'software_start_date';
+        else if (key.includes('billable')) key = 'billable_month';
+        else if (key.includes('branch_type') || key.includes('type')) key = 'branch_type';
+        else if (key.includes('status')) key = 'status';
+
+        rowObj[key] = values[idx] !== undefined ? values[idx] : '';
+      });
+
+      rows.push(rowObj);
+    }
+
+    return rows;
+  },
+
+  async validateRows(rows) {
+    const isMfi = MigrationView.activeTab === 'mfi';
+    const endpoint = isMfi ? '/api/migration/validate/mfi' : '/api/migration/validate/branch';
+
+    const container = document.getElementById('validation-report-container');
+    if (container) {
+      container.innerHTML = `
+        <div style="text-align:center; padding:30px; background:#fff; border-radius:8px; border:1px solid #e2e8f0;">
+          <div style="display:inline-block; width:28px; height:28px; border:3px solid #e2e8f0; border-top-color:#1a56db; border-radius:50%; animation:spin 0.8s linear infinite;"></div>
+          <div style="margin-top:8px; font-size:13px; color:#64748b;">Validating ${rows.length} records against database constraints...</div>
+        </div>
+      `;
+    }
+
+    try {
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rows })
+      });
+
+      const result = await res.json();
+      if (!res.ok || !result.success) {
+        UI.showToast(result.message || 'Validation failed.', 'error');
+        return;
+      }
+
+      MigrationView.validationResult = result;
+      MigrationView.renderValidationReport(result);
+    } catch (err) {
+      console.error('Validation request error:', err);
+      UI.showToast('Validation request failed: ' + err.message, 'error');
+    }
+  },
+
+  renderValidationReport(result = MigrationView.validationResult) {
+    const container = document.getElementById('validation-report-container');
+    if (!container || !result || !Array.isArray(result.rows)) return;
+
+    const isMfi = MigrationView.activeTab === 'mfi';
+    const validRows = result.rows.filter(r => r.isValid);
+
+    container.innerHTML = `
+      <div class="card">
+        <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+          <div>
+            <h3 class="card-title" style="font-size:16px; font-weight:700;">Step 3: Validation Preview & Import Action</h3>
+            <span style="font-size:12px; color:var(--text-muted);">Review validation status before committing to database</span>
+          </div>
+          <div style="display:flex; gap:12px;">
+            <button class="btn btn-secondary" onclick="MigrationView.switchTab('${MigrationView.activeTab}')">Upload New File</button>
+            <button class="btn btn-primary" id="commit-import-btn" ${validRows.length === 0 ? 'disabled' : ''} onclick="MigrationView.commitImport()">
+              🚀 Commit & Import ${validRows.length} Valid Records
+            </button>
+          </div>
+        </div>
+
+        <div class="card-body" style="padding:20px;">
+          <!-- Validation Summary Metrics Cards -->
+          <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:16px; margin-bottom:24px;">
+            <div style="padding:16px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px;">
+              <div style="font-size:12px; color:var(--text-muted); font-weight:600;">Total Records Parsed</div>
+              <div style="font-size:24px; font-weight:700; color:var(--text-primary); margin-top:4px;">${result.total}</div>
+            </div>
+            <div style="padding:16px; background:rgba(16,185,129,0.06); border:1px solid rgba(16,185,129,0.2); border-radius:8px;">
+              <div style="font-size:12px; color:#047857; font-weight:600;">Ready for Import</div>
+              <div style="font-size:24px; font-weight:700; color:#047857; margin-top:4px;">${result.validCount}</div>
+            </div>
+            <div style="padding:16px; background:${result.invalidCount > 0 ? 'rgba(239,68,68,0.06)' : '#f8fafc'}; border:1px solid ${result.invalidCount > 0 ? 'rgba(239,68,68,0.2)' : '#e2e8f0'}; border-radius:8px;">
+              <div style="font-size:12px; color:${result.invalidCount > 0 ? '#b91c1c' : 'var(--text-muted)'}; font-weight:600;">Validation Errors</div>
+              <div style="font-size:24px; font-weight:700; color:${result.invalidCount > 0 ? '#b91c1c' : 'var(--text-primary)'}; margin-top:4px;">${result.invalidCount}</div>
+            </div>
+          </div>
+
+          <!-- Table of Rows -->
+          <div class="table-responsive">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th style="width:60px;">Row #</th>
+                  <th>Record Identifiers</th>
+                  <th>Details & Dates</th>
+                  <th>Validation Status</th>
+                  <th>Validation Remarks / Errors</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${result.rows.map(r => `
+                  <tr style="${!r.isValid ? 'background: rgba(239,68,68,0.02);' : ''}">
+                    <td><strong>#${r.rowNumber}</strong></td>
+                    <td>
+                      ${isMfi ? `
+                        <strong>${r.data.short_name || '—'}</strong><br>
+                        <span style="font-size:12px; color:var(--text-muted);">${r.data.full_name || '—'}</span>
+                      ` : `
+                        <strong>${r.data.branch_name || '—'} (${r.data.branch_code || '—'})</strong><br>
+                        <span style="font-size:12px; color:var(--text-muted);">MFI: ${r.data.mfi_short_name || '—'}</span>
+                      `}
+                    </td>
+                    <td>
+                      ${isMfi ? `
+                        <span style="font-size:12px;">Agreement: ${r.data.initial_agreement_date || '—'}</span><br>
+                        <span style="font-size:12px; color:var(--text-muted);">Fee: BDT ${r.data.initial_license_fee} / ${r.data.initial_om_fee}</span>
+                      ` : `
+                        <span style="font-size:12px;">Software Start: ${r.data.software_start_date || '—'}</span><br>
+                        <span style="font-size:12px; color:var(--text-muted);">Billable Month: ${r.data.billable_month || 'Auto-computed'} (${r.data.branch_type})</span>
+                      `}
+                    </td>
+                    <td>
+                      ${r.isValid ? `
+                        <span class="badge badge-active" style="background:rgba(16,185,129,0.12); color:#047857; font-weight:600;">✓ Ready</span>
+                      ` : `
+                        <span class="badge badge-inactive" style="background:rgba(239,68,68,0.12); color:#b91c1c; font-weight:600;">✕ Error</span>
+                      `}
+                    </td>
+                    <td>
+                      ${r.isValid ? `
+                        <span style="font-size:12px; color:#047857;">Validation passed cleanly.</span>
+                      ` : `
+                        <ul style="margin:0; padding-left:16px; font-size:12px; color:#b91c1c;">
+                          ${r.errors.map(err => `<li>${err}</li>`).join('')}
+                        </ul>
+                      `}
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    `;
+  },
+
+  async commitImport() {
+    if (!MigrationView.validationResult) return;
+
+    const isMfi = MigrationView.activeTab === 'mfi';
+    const validRows = MigrationView.validationResult.rows.filter(r => r.isValid);
+    if (validRows.length === 0) {
+      UI.showToast('No valid rows available to import.', 'error');
+      return;
+    }
+
+    const endpoint = isMfi ? '/api/migration/import/mfi' : '/api/migration/import/branch';
+
+    UI.confirm(`Are you sure you want to import ${validRows.length} valid ${isMfi ? 'MFI' : 'Branch'} records into the database?`, async () => {
+      const btn = document.getElementById('commit-import-btn');
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = 'Importing records...';
+      }
+
+      try {
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ rows: validRows })
+        });
+
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+          UI.showToast(data.message || 'Import failed.', 'error');
+          if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = `🚀 Commit & Import ${validRows.length} Valid Records`;
+          }
+          return;
+        }
+
+        UI.showToast(data.message, 'success');
+
+        setTimeout(() => {
+          Router.navigate(isMfi ? '/mfi' : '/branches');
+        }, 1200);
+      } catch (err) {
+        console.error('Import error:', err);
+        UI.showToast('Import failed: ' + err.message, 'error');
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = `🚀 Commit & Import ${validRows.length} Valid Records`;
+        }
+      }
+    }, { title: `Confirm ${isMfi ? 'MFI' : 'Branch'} Migration Import` });
+  },
+
+  async downloadTemplate(type, format) {
+    try {
+      UI.showToast(`Generating ${type.toUpperCase()} template (${format.toUpperCase()})...`, 'info');
+      const res = await fetch(`/api/migration/template/${type}?format=${format}`);
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        UI.showToast(errData.message || 'Failed to download template', 'error');
+        return;
+      }
+      const blob = await res.blob();
+      const filename = `${type}_migration_template.${format}`;
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      UI.showToast(`Template download started: ${filename}`, 'success');
+    } catch (err) {
+      console.error('Template download error:', err);
+      UI.showToast('Failed to download template: ' + err.message, 'error');
+    }
+  }
+};
+window.MigrationView = MigrationView;
 
 // ==========================================
 // 10. APP INITIALIZATION

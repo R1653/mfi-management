@@ -5,6 +5,7 @@ const AuditService = require('../services/auditService');
 const ExportService = require('../services/exportService');
 const { paginate } = require('../utils/pagination');
 const { requireAuth } = require('../middleware/auth');
+const { requirePermission } = require('../middleware/rbac');
 const dayjs = require('dayjs');
 
 /**
@@ -37,7 +38,7 @@ router.get('/by-team/:teamId', requireAuth, async (req, res) => {
  * GET /api/team-members
  * Paginated list of team members
  */
-router.get('/', requireAuth, async (req, res) => {
+router.get('/', requireAuth, requirePermission('team_member.view'), async (req, res) => {
   try {
     const {
       page = 1,
@@ -104,7 +105,7 @@ router.get('/', requireAuth, async (req, res) => {
 /**
  * GET /api/team-members/export
  */
-router.get('/export', requireAuth, async (req, res) => {
+router.get('/export', requireAuth, requirePermission('report.export'), async (req, res) => {
   try {
     const { format = 'xlsx', search = '', team_id = '', status = '' } = req.query;
 
@@ -188,7 +189,7 @@ router.get('/export', requireAuth, async (req, res) => {
 /**
  * GET /api/team-members/:id
  */
-router.get('/:id', requireAuth, async (req, res) => {
+router.get('/:id', requireAuth, requirePermission('team_member.view'), async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -223,7 +224,7 @@ router.get('/:id', requireAuth, async (req, res) => {
 /**
  * POST /api/team-members
  */
-router.post('/', requireAuth, async (req, res) => {
+router.post('/', requireAuth, requirePermission('team_member.create'), async (req, res) => {
   try {
     const {
       member_name,
@@ -311,7 +312,7 @@ router.post('/', requireAuth, async (req, res) => {
 /**
  * PUT /api/team-members/:id
  */
-router.put('/:id', requireAuth, async (req, res) => {
+router.put('/:id', requireAuth, requirePermission('team_member.update'), async (req, res) => {
   try {
     const { id } = req.params;
     const {
@@ -402,7 +403,7 @@ router.put('/:id', requireAuth, async (req, res) => {
 /**
  * PATCH /api/team-members/:id/status
  */
-router.patch('/:id/status', requireAuth, async (req, res) => {
+router.patch('/:id/status', requireAuth, requirePermission('team_member.update'), async (req, res) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
@@ -446,7 +447,7 @@ router.patch('/:id/status', requireAuth, async (req, res) => {
 /**
  * DELETE /api/team-members/:id
  */
-router.delete('/:id', requireAuth, async (req, res) => {
+router.delete('/:id', requireAuth, requirePermission('team_member.delete'), async (req, res) => {
   try {
     const { id } = req.params;
 

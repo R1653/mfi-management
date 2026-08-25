@@ -15,11 +15,17 @@ function requirePermission(permissionName) {
   return (req, res, next) => {
     const user = req.session?.user;
 
+    const isApi = (req.originalUrl && req.originalUrl.startsWith('/api/')) ||
+                  (req.baseUrl && req.baseUrl.startsWith('/api/')) ||
+                  (req.path && req.path.startsWith('/api/')) ||
+                  req.xhr ||
+                  req.headers.accept?.includes('application/json');
+
     if (!user) {
-      if (req.path.startsWith('/api/') || req.xhr || req.headers.accept?.includes('application/json')) {
+      if (isApi) {
         return res.status(401).json({
           success: false,
-          message: 'Authentication required.'
+          message: 'Authentication required. Please sign in to continue.'
         });
       }
       return res.redirect('/login');
@@ -30,10 +36,10 @@ function requirePermission(permissionName) {
     }
 
     // Forbidden
-    if (req.path.startsWith('/api/') || req.xhr || req.headers.accept?.includes('application/json')) {
+    if (isApi) {
       return res.status(403).json({
         success: false,
-        message: `Forbidden: You do not possess the required permission [${permissionName}].`
+        message: 'You are not a privileged user to perform this action.'
       });
     }
 
@@ -51,7 +57,7 @@ function requirePermission(permissionName) {
             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
           </div>
           <h1 class="text-2xl font-bold text-slate-800 mb-2">Access Denied (403)</h1>
-          <p class="text-slate-600 mb-6">You lack the necessary permission (<code>${permissionName}</code>) to access this resource.</p>
+          <p class="text-slate-600 mb-6">You are not a privileged user to perform this action.</p>
           <div class="flex gap-3 justify-center">
             <a href="javascript:history.back()" class="btn btn-secondary">Go Back</a>
             <a href="/dashboard" class="btn btn-primary">Dashboard</a>

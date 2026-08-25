@@ -30,7 +30,7 @@ DirectoryIndex public/login.html app.js
   RewriteCond %{DOCUMENT_ROOT}/public/$1 -f
   RewriteRule ^(.*)$ public/$1 [L]
 
-  # 2. Pass all SPA route paths (/dashboard, /mfi, /teams, /branches, etc.) to app.js execution engine
+  # 2. Pass all SPA and API route requests to application
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d
   RewriteRule ^(.*)$ app.js [QSA,L]
