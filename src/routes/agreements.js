@@ -200,10 +200,7 @@ router.get('/export', requireAuth, requirePermission('report.export'), async (re
       { header: 'Agreement / Renewal Date', key: 'agreement_date', width: 20 },
       { header: 'Agreement Expire Date', key: 'agreement_expire_date', width: 20 },
       { header: 'License Fee', key: 'license_fee', width: 18 },
-      { header: 'O&M Fee', key: 'om_fee', width: 18 },
-      { header: 'Remarks', key: 'remarks', width: 30 },
-      { header: 'Created By', key: 'created_by', width: 18 },
-      { header: 'Created Date', key: 'created_date', width: 15 }
+      { header: 'O&M Fee', key: 'om_fee', width: 18 }
     ];
 
     if (format === 'csv') {
@@ -214,17 +211,15 @@ router.get('/export', requireAuth, requirePermission('report.export'), async (re
         r.sl.toString(),
         r.mfi,
         r.agreement_date,
+        r.agreement_expire_date,
         r.license_fee.toLocaleString(),
-        r.om_fee.toLocaleString(),
-        r.remarks,
-        r.created_by,
-        r.created_date
+        r.om_fee.toLocaleString()
       ]);
-      return await ExportService.toPDF(res, 'agreement_history_report', 'MFI Agreement & Renewal History', headers, rows);
+      return await ExportService.toPDF(res, 'agreement_history_report', 'AGREEMENT HISTORY', headers, rows);
     } else {
       const buffer = await ExportService.toExcel({
         sheetName: 'Agreements',
-        title: 'MFI Agreement & Renewal History Report',
+        title: 'AGREEMENT HISTORY',
         columns,
         data
       });

@@ -2938,8 +2938,10 @@ const MfiProfileView = {
 // ==========================================
 const BranchListView = {
   state: { page: 1, limit: 10, search: '', mfi_id: '', branch_type: '', status: '', team_id: '', team_member_id: '', pending_billable: '', from_date: '', to_date: '' },
+  isReportMode: false,
 
-  async render(container) {
+  async render(container, isReportMode = false) {
+    BranchListView.isReportMode = Boolean(isReportMode);
     // Fetch MFIs for dropdown filter
     const mfiRes = await fetch('/api/mfis/autocomplete');
     const mfiData = await mfiRes.json();
@@ -2974,22 +2976,31 @@ const BranchListView = {
 
     const hasAdvancedActive = BranchListView.state.team_id || BranchListView.state.team_member_id || BranchListView.state.pending_billable === '1' || BranchListView.state.from_date || BranchListView.state.to_date;
     const activeAdvCount = [BranchListView.state.team_id, BranchListView.state.team_member_id, BranchListView.state.pending_billable === '1' ? '1' : '', BranchListView.state.from_date, BranchListView.state.to_date].filter(Boolean).length;
+    const isReport = BranchListView.isReportMode;
 
     container.innerHTML = `
       <div class="page-header">
         <div>
-          <h1 class="page-title">Branch Offices Management</h1>
+          <h1 class="page-title">${isReport ? 'BRANCH REPORT' : 'Branch Offices Management'}</h1>
         </div>
         <div class="page-actions">
-          <div class="btn-group">
-            <button class="btn btn-secondary" onclick="BranchListView.export('xlsx')">Excel</button>
-            <button class="btn btn-secondary" onclick="BranchListView.export('csv')">CSV</button>
-            <button class="btn btn-secondary" onclick="BranchListView.export('pdf')">PDF</button>
-          </div>
-          <a href="/branches/create" class="btn btn-primary">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            <span>Add Branch</span>
-          </a>
+          ${isReport ? `
+            <button class="btn btn-secondary" onclick="window.print()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+              <span>Print Report</span>
+            </button>
+            <button class="btn btn-primary" onclick="BranchListView.export('xlsx')">Export Excel</button>
+          ` : `
+            <div class="btn-group">
+              <button class="btn btn-secondary" onclick="BranchListView.export('xlsx')">Excel</button>
+              <button class="btn btn-secondary" onclick="BranchListView.export('csv')">CSV</button>
+              <button class="btn btn-secondary" onclick="BranchListView.export('pdf')">PDF</button>
+            </div>
+            <a href="/branches/create" class="btn btn-primary">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              <span>Add Branch</span>
+            </a>
+          `}
         </div>
       </div>
 
@@ -3087,12 +3098,12 @@ const BranchListView = {
                 <th>Software Start Date</th>
                 <th>Billable Month</th>
                 <th>Branch Type</th>
-                <th>Status</th>
-                <th style="text-align: right; width: 120px;">Actions</th>
+                ${isReport ? '' : '<th>Status</th>'}
+                ${isReport ? '' : '<th style="text-align: right; width: 120px;">Actions</th>'}
               </tr>
             </thead>
             <tbody id="branch-table-body">
-              <tr><td colspan="10" style="text-align:center; padding: 30px;">Loading branches...</td></tr>
+              <tr><td colspan="${isReport ? '8' : '10'}" style="text-align:center; padding: 30px;">Loading branches...</td></tr>
             </tbody>
           </table>
         </div>
@@ -3146,6 +3157,7 @@ const BranchListView = {
   },
 
   async fetchData() {
+    const isReport = BranchListView.isReportMode;
     const { page, limit, search, mfi_id, branch_type, status, team_id, team_member_id, pending_billable, from_date, to_date } = BranchListView.state;
     const url = `/api/branches?page=${page}&limit=${limit}&search=${encodeURIComponent(search)}&mfi_id=${encodeURIComponent(mfi_id)}&branch_type=${encodeURIComponent(branch_type)}&status=${encodeURIComponent(status)}&team_id=${encodeURIComponent(team_id)}&team_member_id=${encodeURIComponent(team_member_id)}&pending_billable=${encodeURIComponent(pending_billable)}&from_date=${encodeURIComponent(from_date)}&to_date=${encodeURIComponent(to_date)}`;
     const res = await fetch(url);
@@ -3157,11 +3169,11 @@ const BranchListView = {
     if (!result.data || result.data.length === 0) {
       tbody.innerHTML = `
         <tr>
-          <td colspan="10">
+          <td colspan="${isReport ? '8' : '10'}">
             <div class="empty-state">
               <h3 class="empty-state-title">No Branches Found</h3>
               <p class="empty-state-text">No branch records match the filter criteria.</p>
-              <a href="/branches/create" class="btn btn-primary btn-sm">Add New Branch</a>
+              ${isReport ? '' : '<a href="/branches/create" class="btn btn-primary btn-sm">Add New Branch</a>'}
             </div>
           </td>
         </tr>
@@ -3184,27 +3196,31 @@ const BranchListView = {
         <td>${b.software_start_date_formatted}</td>
         <td><strong>${b.billable_month}</strong></td>
         <td><span class="badge badge-neutral">${b.branch_type}</span></td>
-        <td>
-          <span class="badge ${b.status === 'active' ? 'badge-active' : 'badge-inactive'}">
-            <span class="badge-dot"></span>
-            ${b.status.toUpperCase()}
-          </span>
-        </td>
-        <td class="table-actions-cell">
-          <div class="table-actions-group">
-            <a href="/branches/${b.id}/edit" class="action-btn action-btn-edit" title="Edit Branch">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-            </a>
-            <button class="action-btn action-btn-status ${b.status === 'active' ? 'is-active' : 'is-inactive'}" onclick="BranchListView.toggleStatus(${b.id}, '${b.status === 'active' ? 'inactive' : 'active'}')" title="${b.status === 'active' ? 'Deactivate Branch' : 'Activate Branch'}">
-              ${b.status === 'active'
-                ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>'
-                : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20 6 9 17 4 12"/></svg>'}
-            </button>
-            <button class="action-btn action-btn-delete" onclick="BranchListView.deleteBranch(${b.id}, '${escape(b.branch_name)}')" title="Delete Branch">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
-            </button>
-          </div>
-        </td>
+        ${isReport ? '' : `
+          <td>
+            <span class="badge ${b.status === 'active' ? 'badge-active' : 'badge-inactive'}">
+              <span class="badge-dot"></span>
+              ${b.status.toUpperCase()}
+            </span>
+          </td>
+        `}
+        ${isReport ? '' : `
+          <td class="table-actions-cell">
+            <div class="table-actions-group">
+              <a href="/branches/${b.id}/edit" class="action-btn action-btn-edit" title="Edit Branch">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+              </a>
+              <button class="action-btn action-btn-status ${b.status === 'active' ? 'is-active' : 'is-inactive'}" onclick="BranchListView.toggleStatus(${b.id}, '${b.status === 'active' ? 'inactive' : 'active'}')" title="${b.status === 'active' ? 'Deactivate Branch' : 'Activate Branch'}">
+                ${b.status === 'active'
+                  ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>'
+                  : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20 6 9 17 4 12"/></svg>'}
+              </button>
+              <button class="action-btn action-btn-delete" onclick="BranchListView.deleteBranch(${b.id}, '${escape(b.branch_name)}')" title="Delete Branch">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+              </button>
+            </div>
+          </td>
+        `}
       </tr>
     `).join('');
 
@@ -3236,8 +3252,11 @@ const BranchListView = {
     if (teamFilter) teamFilter.value = '';
     const memberFilter = document.getElementById('branch-member-filter');
     if (memberFilter) memberFilter.value = '';
-    const pendingCb = document.getElementById('branch-pending-billable');
-    if (pendingCb) { pendingCb.checked = false; pendingCb.dispatchEvent(new Event('change')); }
+    const pendingBillable = document.getElementById('branch-pending-billable');
+    if (pendingBillable) {
+      pendingBillable.checked = false;
+      pendingBillable.dispatchEvent(new Event('change'));
+    }
     const fromEl = document.getElementById('branch-from-date');
     if (fromEl) fromEl.value = '';
     const toEl = document.getElementById('branch-to-date');
@@ -3292,7 +3311,7 @@ const BranchListView = {
 
   export(format) {
     const { search, mfi_id, branch_type, status, team_id, team_member_id, pending_billable, from_date, to_date } = BranchListView.state;
-    window.open(`/api/branches/export?format=${format}&search=${encodeURIComponent(search)}&mfi_id=${encodeURIComponent(mfi_id)}&branch_type=${encodeURIComponent(branch_type)}&status=${encodeURIComponent(status)}&team_id=${encodeURIComponent(team_id)}&team_member_id=${encodeURIComponent(team_member_id)}&pending_billable=${encodeURIComponent(pending_billable)}&from_date=${encodeURIComponent(from_date)}&to_date=${encodeURIComponent(to_date)}`, '_blank');
+    window.location.href = `/api/branches/export?format=${format}&search=${encodeURIComponent(search)}&mfi_id=${encodeURIComponent(mfi_id)}&branch_type=${encodeURIComponent(branch_type)}&status=${encodeURIComponent(status)}&team_id=${encodeURIComponent(team_id)}&team_member_id=${encodeURIComponent(team_member_id)}&pending_billable=${encodeURIComponent(pending_billable)}&from_date=${encodeURIComponent(from_date)}&to_date=${encodeURIComponent(to_date)}`;
   }
 };
 
@@ -3697,22 +3716,34 @@ const BranchFormView = {
 // ==========================================
 const AgreementListView = {
   state: { page: 1, limit: 10, search: '', mfi_id: '', start_date: '', end_date: '' },
+  isReportMode: false,
 
-  async render(container) {
+  async render(container, isReportMode = false) {
+    AgreementListView.isReportMode = Boolean(isReportMode);
     const mfiRes = await fetch('/api/mfis/autocomplete');
     const mfiData = await mfiRes.json();
     AppState.cachedMfis = mfiData.data || [];
 
+    const isReport = AgreementListView.isReportMode;
+
     container.innerHTML = `
       <div class="page-header">
         <div>
-          <h1 class="page-title">Agreement & Renewal Management</h1>
+          <h1 class="page-title">${isReport ? 'AGREEMENT HISTORY' : 'Agreement & Renewal Management'}</h1>
         </div>
         <div class="page-actions">
-          <a href="/agreements/create" class="btn btn-primary">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            <span>Add Renewal Agreement</span>
-          </a>
+          ${isReport ? `
+            <button class="btn btn-secondary" onclick="window.print()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+              <span>Print Report</span>
+            </button>
+            <button class="btn btn-primary" onclick="AgreementListView.export('xlsx')">Export Excel</button>
+          ` : `
+            <a href="/agreements/create" class="btn btn-primary">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              <span>Add Renewal Agreement</span>
+            </a>
+          `}
         </div>
       </div>
 
@@ -3757,15 +3788,11 @@ const AgreementListView = {
                 <th>Agreement Expire Date</th>
                 <th>License Fee per Branch</th>
                 <th>O&M Fee per Branch</th>
-                <th>Status</th>
-                <th>Remarks</th>
-                <th>Created By</th>
-                <th>Created Date</th>
-                <th style="text-align: right; width: 100px;">Actions</th>
+                ${isReport ? '' : '<th style="text-align: right; width: 100px;">Actions</th>'}
               </tr>
             </thead>
             <tbody id="agr-table-body">
-              <tr><td colspan="11" style="text-align:center; padding: 30px;">Loading agreements...</td></tr>
+              <tr><td colspan="${isReport ? '6' : '7'}" style="text-align:center; padding: 30px;">Loading agreements...</td></tr>
             </tbody>
           </table>
         </div>
@@ -3781,6 +3808,7 @@ const AgreementListView = {
   },
 
   async fetchData() {
+    const isReport = AgreementListView.isReportMode;
     const { page, limit, search, mfi_id, start_date, end_date } = AgreementListView.state;
     const url = `/api/agreements?page=${page}&limit=${limit}&search=${encodeURIComponent(search)}&mfi_id=${encodeURIComponent(mfi_id)}&start_date=${encodeURIComponent(start_date)}&end_date=${encodeURIComponent(end_date)}`;
     const res = await fetch(url);
@@ -3792,11 +3820,11 @@ const AgreementListView = {
     if (!result.data || result.data.length === 0) {
       tbody.innerHTML = `
         <tr>
-          <td colspan="11">
+          <td colspan="${isReport ? '6' : '7'}">
             <div class="empty-state">
               <h3 class="empty-state-title">No Agreements Found</h3>
               <p class="empty-state-text">No agreement records match your search criteria.</p>
-              <a href="/agreements/create" class="btn btn-primary btn-sm">Record Agreement Renewal</a>
+              ${isReport ? '' : '<a href="/agreements/create" class="btn btn-primary btn-sm">Record Agreement Renewal</a>'}
             </div>
           </td>
         </tr>
@@ -3818,22 +3846,18 @@ const AgreementListView = {
         <td>${a.agreement_expire_date ? UI.formatDate(a.agreement_expire_date) : '<span style="color:var(--text-muted);">Not Set</span>'}</td>
         <td><strong style="color: var(--primary);">${UI.formatCurrency(a.license_fee_per_branch)}</strong></td>
         <td><strong style="color: var(--warning);">${UI.formatCurrency(a.om_fee_per_branch)}</strong></td>
-        <td>
-          ${a.is_upcoming ? '<span class="badge badge-upcoming"><span class="badge-dot"></span> Upcoming</span>' : '<span class="badge badge-neutral">Active / Historical</span>'}
-        </td>
-        <td style="color: var(--text-muted); max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${a.remarks || '—'}</td>
-        <td>${a.creator_name || 'System'}</td>
-        <td style="color: var(--text-light);">${a.created_at_formatted}</td>
-        <td class="table-actions-cell">
-          <div class="table-actions-group">
-            <button class="action-btn action-btn-edit" onclick="AgreementListView.openEditModal(${a.id})" title="Edit Agreement">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-            </button>
-            <button class="action-btn action-btn-delete" onclick="AgreementListView.deleteAgreement(${a.id}, '${a.agreement_date_formatted}', '${escape(a.mfi_short_name)}')" title="Delete Agreement">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
-            </button>
-          </div>
-        </td>
+        ${isReport ? '' : `
+          <td class="table-actions-cell">
+            <div class="table-actions-group">
+              <button class="action-btn action-btn-edit" onclick="AgreementListView.openEditModal(${a.id})" title="Edit Agreement">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+              </button>
+              <button class="action-btn action-btn-delete" onclick="AgreementListView.deleteAgreement(${a.id}, '${a.agreement_date_formatted}', '${escape(a.mfi_short_name)}')" title="Delete Agreement">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+              </button>
+            </div>
+          </td>
+        `}
       </tr>
     `).join('');
 
@@ -4963,6 +4987,166 @@ const AuditLogsView = {
 // ==========================================
 // 9. REPORTS VIEW (MFI, Branch, Agreement, Renewal Due)
 // ==========================================
+const MfiReportView = {
+  state: { search: '', status: '', team_member_id: '', team_leader_id: '', is_head_office_billable: '' },
+
+  async render(container) {
+    let filterOptions = { assignedMembers: [], assignedLeaders: [] };
+    try {
+      const res = await fetch('/api/mfis/filter-options');
+      const data = await res.json();
+      if (data.success) filterOptions = data.data;
+    } catch (e) {
+      console.error('Error loading MFI filter options:', e);
+    }
+
+    container.innerHTML = `
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">Microfinance Institutions Master Report</h1>
+        </div>
+        <div class="page-actions">
+          <button class="btn btn-secondary" onclick="window.print()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+            <span>Print Report</span>
+          </button>
+          <button class="btn btn-primary" onclick="MfiReportView.export('xlsx')">Export Excel</button>
+        </div>
+      </div>
+
+      <!-- Filter Bar -->
+      <div class="filter-bar">
+        <div class="filter-group">
+          <div class="search-input-wrapper">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input type="text" id="mfi-report-search" class="form-control" placeholder="Search by MFI Name or Short Code..." value="${MfiReportView.state.search}">
+          </div>
+
+          <select id="mfi-report-status-filter" class="form-select" style="width: 140px;">
+            <option value="">All Statuses</option>
+            <option value="active" ${MfiReportView.state.status === 'active' ? 'selected' : ''}>Active</option>
+            <option value="inactive" ${MfiReportView.state.status === 'inactive' ? 'selected' : ''}>Inactive</option>
+          </select>
+
+          <select id="mfi-report-team-member-filter" class="form-select" style="width: 180px;">
+            <option value="">All Team Members</option>
+            ${filterOptions.assignedMembers.map(m => `
+              <option value="${m.id}" ${MfiReportView.state.team_member_id == m.id ? 'selected' : ''}>${m.member_name} (${m.member_code})</option>
+            `).join('')}
+          </select>
+
+          <select id="mfi-report-team-leader-filter" class="form-select" style="width: 180px;">
+            <option value="">All Team Leaders</option>
+            ${filterOptions.assignedLeaders.map(l => `
+              <option value="${l.id}" ${MfiReportView.state.team_leader_id == l.id ? 'selected' : ''}>${l.member_name} (${l.member_code})</option>
+            `).join('')}
+          </select>
+
+          <select id="mfi-report-hob-filter" class="form-select" style="width: 160px;">
+            <option value="">Head Office Billable</option>
+            <option value="yes" ${MfiReportView.state.is_head_office_billable === 'yes' ? 'selected' : ''}>YES</option>
+            <option value="no" ${MfiReportView.state.is_head_office_billable === 'no' ? 'selected' : ''}>NO</option>
+          </select>
+
+          <button class="btn btn-secondary" onclick="MfiReportView.applyFilters()">Filter</button>
+          <button class="btn btn-ghost" onclick="MfiReportView.resetFilters()">Reset</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="table-responsive">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>SL</th>
+                <th>MFI FULL NAME</th>
+                <th>SHORT CODE</th>
+                <th>ESTABLISH DATE</th>
+                <th>ACTIVE BRANCHES</th>
+                <th>LICENSE FEE</th>
+                <th>O&M FEE</th>
+                <th>PROJECTED MONTHLY TOTAL</th>
+              </tr>
+            </thead>
+            <tbody id="mfi-report-table-body">
+              <tr><td colspan="8" style="text-align:center; padding: 30px;">Loading report data...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+
+    document.getElementById('mfi-report-search').addEventListener('keyup', (e) => {
+      if (e.key === 'Enter') MfiReportView.applyFilters();
+    });
+
+    await MfiReportView.fetchData();
+  },
+
+  async fetchData() {
+    const { search, status, team_member_id, team_leader_id, is_head_office_billable } = MfiReportView.state;
+    const url = `/api/reports/mfi?search=${encodeURIComponent(search)}&status=${encodeURIComponent(status)}&team_member_id=${encodeURIComponent(team_member_id || '')}&team_leader_id=${encodeURIComponent(team_leader_id || '')}&is_head_office_billable=${encodeURIComponent(is_head_office_billable || '')}`;
+    const res = await fetch(url);
+    const { data } = await res.json();
+
+    const tbody = document.getElementById('mfi-report-table-body');
+    if (!data || data.length === 0) {
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="8">
+            <div class="empty-state">
+              <h3 class="empty-state-title">No MFI Records Found</h3>
+              <p class="empty-state-text">No records match your filter criteria.</p>
+            </div>
+          </td>
+        </tr>
+      `;
+      return;
+    }
+
+    tbody.innerHTML = data.map(m => `
+      <tr>
+        <td><strong>${m.sl}</strong></td>
+        <td style="font-weight: 600;">${m.full_name}</td>
+        <td><span class="badge badge-neutral">${m.short_name}</span></td>
+        <td>${m.establish_date}</td>
+        <td><strong>${m.active_branches}</strong></td>
+        <td>${UI.formatCurrency(m.current_license_fee)}</td>
+        <td>${UI.formatCurrency(m.current_om_fee)}</td>
+        <td><strong style="color: var(--primary); font-size: 14px;">${UI.formatCurrency(m.monthly_projected_total)}</strong></td>
+      </tr>
+    `).join('');
+  },
+
+  applyFilters() {
+    MfiReportView.state.search = document.getElementById('mfi-report-search').value.trim();
+    MfiReportView.state.status = document.getElementById('mfi-report-status-filter').value;
+    MfiReportView.state.team_member_id = document.getElementById('mfi-report-team-member-filter')?.value || '';
+    MfiReportView.state.team_leader_id = document.getElementById('mfi-report-team-leader-filter')?.value || '';
+    MfiReportView.state.is_head_office_billable = document.getElementById('mfi-report-hob-filter')?.value || '';
+    MfiReportView.fetchData();
+  },
+
+  resetFilters() {
+    document.getElementById('mfi-report-search').value = '';
+    document.getElementById('mfi-report-status-filter').value = '';
+    if (document.getElementById('mfi-report-team-member-filter')) document.getElementById('mfi-report-team-member-filter').value = '';
+    if (document.getElementById('mfi-report-team-leader-filter')) document.getElementById('mfi-report-team-leader-filter').value = '';
+    if (document.getElementById('mfi-report-hob-filter')) document.getElementById('mfi-report-hob-filter').value = '';
+    MfiReportView.state.search = '';
+    MfiReportView.state.status = '';
+    MfiReportView.state.team_member_id = '';
+    MfiReportView.state.team_leader_id = '';
+    MfiReportView.state.is_head_office_billable = '';
+    MfiReportView.fetchData();
+  },
+
+  export(format) {
+    const { search, status, team_member_id, team_leader_id, is_head_office_billable } = MfiReportView.state;
+    window.open(`/api/reports/mfi/export?format=${format}&search=${encodeURIComponent(search)}&status=${encodeURIComponent(status)}&team_member_id=${encodeURIComponent(team_member_id || '')}&team_leader_id=${encodeURIComponent(team_leader_id || '')}&is_head_office_billable=${encodeURIComponent(is_head_office_billable || '')}`, '_blank');
+  }
+};
+
 const ReportsView = {
   async render(container, type) {
     if (type === 'mfi') {
@@ -4973,106 +5157,34 @@ const ReportsView = {
       await ReportsView.renderAgreementHistoryReport(container);
     } else if (type === 'renewal-due') {
       await ReportsView.renderRenewalDueReport(container);
+    } else if (type === 'om-bill') {
+      await ReportsView.renderOmBillReport(container);
+    } else if (type === 'licence-bill') {
+      await ReportsView.renderLicenceBillReport(container);
     }
   },
 
   async renderMfiReport(container) {
-    const res = await fetch('/api/reports/mfi');
-    const { data } = await res.json();
-
-    container.innerHTML = `
-      <div class="page-header">
-        <div>
-          <h1 class="page-title">Microfinance Institutions Master Report</h1>
-          <p class="page-subtitle">Consolidated operational capacity and projected monthly support fee billing</p>
-        </div>
-        <div class="page-actions">
-          <button class="btn btn-secondary" onclick="window.print()">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-            <span>Print Report</span>
-          </button>
-          <button class="btn btn-primary" onclick="MfiListView.export('xlsx')">Export Excel</button>
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="table-responsive">
-          <table class="table">
-            <thead>
-              <tr>
-                <th>SL</th>
-                <th>MFI Full Name</th>
-                <th>Short Code</th>
-                <th>Establish Date</th>
-                <th>Active Branches</th>
-                <th>License Fee</th>
-                <th>O&M Fee</th>
-                <th>Projected Monthly Total</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${data.map(m => `
-                <tr>
-                  <td><strong>${m.sl}</strong></td>
-                  <td style="font-weight: 600;">${m.full_name}</td>
-                  <td><span class="badge badge-neutral">${m.short_name}</span></td>
-                  <td>${m.establish_date}</td>
-                  <td><strong>${m.active_branches}</strong></td>
-                  <td>${UI.formatCurrency(m.current_license_fee)}</td>
-                  <td>${UI.formatCurrency(m.current_om_fee)}</td>
-                  <td><strong style="color: var(--primary); font-size: 14px;">${UI.formatCurrency(m.monthly_projected_total)}</strong></td>
-                  <td><span class="badge ${m.status === 'active' ? 'badge-active' : 'badge-inactive'}">${m.status.toUpperCase()}</span></td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    `;
+    await MfiReportView.render(container);
   },
 
   async renderBranchReport(container) {
-    container.innerHTML = `
-      <div class="page-header">
-        <div>
-          <h1 class="page-title">Branch Network Infrastructure Report</h1>
-          <p class="page-subtitle">Master branch audit, deployment milestones, and office categorization</p>
-        </div>
-        <div class="page-actions">
-          <button class="btn btn-secondary" onclick="window.print()">Print</button>
-          <button class="btn btn-primary" onclick="BranchListView.export('xlsx')">Export Excel</button>
-        </div>
-      </div>
-    `;
-    await BranchListView.render(container);
+    await BranchListView.render(container, true);
   },
 
   async renderAgreementHistoryReport(container) {
-    container.innerHTML = `
-      <div class="page-header">
-        <div>
-          <h1 class="page-title">Agreement & Fee Evolution History Report</h1>
-          <p class="page-subtitle">Historical audit trail of all signed institutional support agreements</p>
-        </div>
-        <div class="page-actions">
-          <button class="btn btn-secondary" onclick="window.print()">Print</button>
-          <button class="btn btn-primary" onclick="AgreementListView.export('xlsx')">Export Excel</button>
-        </div>
-      </div>
-    `;
-    await AgreementListView.render(container);
+    await AgreementListView.render(container, true);
   },
 
   async renderRenewalDueReport(container) {
     const res = await fetch('/api/reports/renewal-due');
-    const { data: alerts } = await res.json();
+    const json = await res.json();
+    const alerts = (json && json.data) ? json.data : { expired: [], within_30: [], within_60: [], within_90: [], all_upcoming: [] };
 
     container.innerHTML = `
       <div class="page-header">
         <div>
           <h1 class="page-title">Agreement Renewal Due & Expiry Report</h1>
-          <p class="page-subtitle">Agreements expired, pending renewal, or scheduled for renewal within 30, 60, and 90 days</p>
         </div>
         <div class="page-actions">
           <button class="btn btn-secondary" onclick="window.print()">Print</button>
@@ -5190,8 +5302,580 @@ const ReportsView = {
             </tbody>
           </table>
         </div>
+    `;
+  },
+
+  omBillState: {
+    search: '',
+    mfi_id: '',
+    team_id: '',
+    team_member_id: '',
+    reporting_month: '',
+    min_branches: '',
+    max_branches: ''
+  },
+
+  async renderOmBillReport(container) {
+    if (!ReportsView.omBillState.reporting_month) {
+      const now = new Date();
+      const yr = now.getFullYear();
+      const mo = String(now.getMonth() + 1).padStart(2, '0');
+      ReportsView.omBillState.reporting_month = `${yr}-${mo}`;
+    }
+
+    container.innerHTML = `
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">O & M Bill Report</h1>
+        </div>
+        <div class="page-actions">
+          <button class="btn btn-secondary" onclick="window.print()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+            <span>Print Report</span>
+          </button>
+          <button class="btn btn-primary" onclick="ReportsView.exportOmBill('xlsx')">Export Excel</button>
+        </div>
+      </div>
+
+      <!-- Advanced Filter Panel (Search Parameters) -->
+      <div class="card p-4" style="margin-bottom: 24px; padding: 20px;">
+        <div style="font-weight: 700; font-size: 14px; margin-bottom: 16px; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+          <span>Search & Filter Parameters</span>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+          <!-- General Search -->
+          <div class="form-group" style="margin-bottom:0;">
+            <label class="form-label" style="font-size: 12px; font-weight: 600;">General Search</label>
+            <input type="text" class="form-control" id="ombill-search" placeholder="Search MFI name, code, member..." value="${ReportsView.omBillState.search}">
+          </div>
+
+          <!-- MFI Dropdown -->
+          <div class="form-group" style="margin-bottom:0;">
+            <label class="form-label" style="font-size: 12px; font-weight: 600;">MFI (All / Individual)</label>
+            <select class="form-control" id="ombill-mfi">
+              <option value="">All MFIs</option>
+            </select>
+          </div>
+
+          <!-- Team Dropdown -->
+          <div class="form-group" style="margin-bottom:0;">
+            <label class="form-label" style="font-size: 12px; font-weight: 600;">Team (All / Individual)</label>
+            <select class="form-control" id="ombill-team" onchange="ReportsView.onOmBillTeamChange()">
+              <option value="">All Teams</option>
+            </select>
+          </div>
+
+          <!-- Team Member Dropdown -->
+          <div class="form-group" style="margin-bottom:0;">
+            <label class="form-label" style="font-size: 12px; font-weight: 600;">Team Member</label>
+            <select class="form-control" id="ombill-member">
+              <option value="">All Team Members</option>
+            </select>
+          </div>
+
+          <!-- Reporting Month -->
+          <div class="form-group" style="margin-bottom:0;">
+            <label class="form-label" style="font-size: 12px; font-weight: 600;">Reporting Month</label>
+            <input type="month" class="form-control" id="ombill-month" value="${ReportsView.omBillState.reporting_month}">
+          </div>
+
+          <!-- Branch Range (Min & Max) -->
+          <div class="form-group" style="margin-bottom:0;">
+            <label class="form-label" style="font-size: 12px; font-weight: 600;">Branch Range (From - To)</label>
+            <div style="display: flex; gap: 8px;">
+              <input type="number" class="form-control" id="ombill-min-branches" placeholder="Min" min="0" value="${ReportsView.omBillState.min_branches}">
+              <input type="number" class="form-control" id="ombill-max-branches" placeholder="Max" min="0" value="${ReportsView.omBillState.max_branches}">
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-top: 16px; display: flex; justify-content: flex-end; gap: 12px;">
+          <button class="btn btn-secondary btn-sm" onclick="ReportsView.resetOmBillFilters()">Reset Parameters</button>
+          <button class="btn btn-primary btn-sm" onclick="ReportsView.applyOmBillFilters()">Show Report</button>
+        </div>
+      </div>
+
+      <!-- Report Table Container -->
+      <div class="card" id="ombill-table-container">
+        <div style="text-align: center; padding: 50px;">
+          <div style="display:inline-block; width:30px; height:30px; border:3px solid #e2e8f0; border-top-color:#1a56db; border-radius:50%; animation:spin 0.8s linear infinite;"></div>
+          <div style="margin-top:10px; color:#64748b; font-size:13px;">Loading O & M bill report data...</div>
+        </div>
       </div>
     `;
+
+    await ReportsView.loadOmBillFilterOptions();
+    await ReportsView.fetchOmBillData();
+  },
+
+  async loadOmBillFilterOptions() {
+    try {
+      const mfiRes = await fetch('/api/mfis/autocomplete?limit=500');
+      if (mfiRes.ok) {
+        const { data: mfis } = await mfiRes.json();
+        const select = document.getElementById('ombill-mfi');
+        if (select && Array.isArray(mfis)) {
+          select.innerHTML = '<option value="">All MFIs</option>' +
+            mfis.map(m => `<option value="${m.id}" ${String(m.id) === String(ReportsView.omBillState.mfi_id) ? 'selected' : ''}>${m.short_name} — ${m.full_name}</option>`).join('');
+        }
+      }
+
+      const teamRes = await fetch('/api/teams/all');
+      if (teamRes.ok) {
+        const { data: teams } = await teamRes.json();
+        const select = document.getElementById('ombill-team');
+        if (select && Array.isArray(teams)) {
+          select.innerHTML = '<option value="">All Teams</option>' +
+            teams.map(t => `<option value="${t.id}" ${String(t.id) === String(ReportsView.omBillState.team_id) ? 'selected' : ''}>${t.team_name} (${t.team_code})</option>`).join('');
+        }
+      }
+
+      await ReportsView.onOmBillTeamChange(true);
+    } catch (err) {
+      console.error('Error loading OM Bill filter options:', err);
+    }
+  },
+
+  async onOmBillTeamChange(isInitial = false) {
+    const teamSelect = document.getElementById('ombill-team');
+    const memberSelect = document.getElementById('ombill-member');
+    if (!memberSelect) return;
+
+    const teamId = teamSelect ? teamSelect.value : '';
+
+    try {
+      let endpoint = '/api/teams/members/assigned';
+      if (teamId) {
+        endpoint = `/api/team-members/by-team/${teamId}`;
+      }
+      const res = await fetch(endpoint);
+      if (res.ok) {
+        const { data: members } = await res.json();
+        if (Array.isArray(members)) {
+          memberSelect.innerHTML = '<option value="">All Team Members</option>' +
+            members.map(m => `<option value="${m.id}" ${String(m.id) === String(ReportsView.omBillState.team_member_id) ? 'selected' : ''}>${m.member_name} (${m.member_code})</option>`).join('');
+        }
+      }
+    } catch (err) {
+      console.error('Error loading team members:', err);
+    }
+  },
+
+  applyOmBillFilters() {
+    ReportsView.omBillState.search = document.getElementById('ombill-search').value.trim();
+    ReportsView.omBillState.mfi_id = document.getElementById('ombill-mfi').value;
+    ReportsView.omBillState.team_id = document.getElementById('ombill-team').value;
+    ReportsView.omBillState.team_member_id = document.getElementById('ombill-member').value;
+    ReportsView.omBillState.reporting_month = document.getElementById('ombill-month').value;
+    ReportsView.omBillState.min_branches = document.getElementById('ombill-min-branches').value;
+    ReportsView.omBillState.max_branches = document.getElementById('ombill-max-branches').value;
+
+    ReportsView.fetchOmBillData();
+  },
+
+  resetOmBillFilters() {
+    const now = new Date();
+    const yr = now.getFullYear();
+    const mo = String(now.getMonth() + 1).padStart(2, '0');
+
+    ReportsView.omBillState = {
+      search: '',
+      mfi_id: '',
+      team_id: '',
+      team_member_id: '',
+      reporting_month: `${yr}-${mo}`,
+      min_branches: '',
+      max_branches: ''
+    };
+
+    document.getElementById('ombill-search').value = '';
+    document.getElementById('ombill-mfi').value = '';
+    document.getElementById('ombill-team').value = '';
+    document.getElementById('ombill-member').value = '';
+    document.getElementById('ombill-month').value = `${yr}-${mo}`;
+    document.getElementById('ombill-min-branches').value = '';
+    document.getElementById('ombill-max-branches').value = '';
+
+    ReportsView.onOmBillTeamChange();
+    ReportsView.fetchOmBillData();
+  },
+
+  async fetchOmBillData() {
+    const container = document.getElementById('ombill-table-container');
+    if (!container) return;
+
+    const { search, mfi_id, team_id, team_member_id, reporting_month, min_branches, max_branches } = ReportsView.omBillState;
+
+    const queryParams = new URLSearchParams({
+      search,
+      mfi_id,
+      team_id,
+      team_member_id,
+      reporting_month,
+      min_branches,
+      max_branches
+    });
+
+    try {
+      const res = await fetch(`/api/reports/om-bill?${queryParams.toString()}`, {
+        headers: { 'Accept': 'application/json' }
+      });
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.message || 'Failed to fetch O & M bill report data.');
+      }
+
+      const { data } = await res.json();
+      const { rows, summary, reporting_month: repMonth, last_month: lastMo } = data;
+
+      const repMonthObj = new Date(repMonth + '-01');
+      const repMonthTitle = repMonthObj.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+
+      const lastMonthObj = new Date(lastMo + '-01');
+      const lastMonthTitle = lastMonthObj.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+
+      container.innerHTML = `
+        <div class="table-responsive">
+          <table class="table">
+            <thead>
+              <tr style="background: #e2e8f0; color: #1e293b;">
+                <th style="width: 50px; text-align: center;">SL</th>
+                <th>MFI Short Name</th>
+                <th>Team Member Name</th>
+                <th style="text-align: center;">Total O&M Billing Branch<br><small style="font-weight: 500;">(Last Month: ${lastMonthTitle})</small></th>
+                <th style="text-align: center;">New Billable Branch<br><small style="font-weight: 500;">(Reporting Month: ${repMonthTitle})</small></th>
+                <th>Name & ID of New Billable Branches</th>
+                <th style="text-align: center;">Total O&M Bill<br><small style="font-weight: 500;">(Current Month)</small></th>
+                <th style="text-align: center;">Head office Billable</th>
+                <th style="text-align: center;">Total Branch<br><small style="font-weight: 500;">(With HO)</small></th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows.length === 0 ? `<tr><td colspan="9" style="text-align: center; padding: 30px; color: var(--text-muted);">No records found matching search filters.</td></tr>` : ''}
+              ${rows.map(r => `
+                <tr>
+                  <td style="text-align: center;"><strong>${r.sl}</strong></td>
+                  <td><strong style="color: var(--primary);">${r.short_name}</strong> <span style="font-size: 11px; color: var(--text-muted); font-weight: normal;">(${r.full_name})</span></td>
+                  <td>${r.team_member_name}</td>
+                  <td style="text-align: center; font-weight: 600;">${r.last_month_billable_branches}</td>
+                  <td style="text-align: center; font-weight: 600; color: ${r.new_billable_branches > 0 ? '#059669' : 'inherit'};">${r.new_billable_branches}</td>
+                  <td><span style="font-size: 12px;">${r.new_billable_branch_names}</span></td>
+                  <td style="text-align: center; font-weight: 700; color: var(--primary); font-size: 14px;">${r.total_om_bill_current_month}</td>
+                  <td style="text-align: center;"><span class="badge ${r.head_office_billable === 'Yes' ? 'badge-active' : 'badge-neutral'}">${r.head_office_billable}</span></td>
+                  <td style="text-align: center; font-weight: 700; font-size: 14px;">${r.total_branch_with_ho}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+            ${rows.length > 0 ? `
+              <tfoot>
+                <tr style="background: #f1f5f9; font-weight: 700; border-top: 2px solid var(--border-color);">
+                  <td colspan="3" style="text-align: right; padding-right: 16px;">Total (${summary.total_mfis} MFIs):</td>
+                  <td style="text-align: center; font-size: 14px;">${summary.total_last_month_branches}</td>
+                  <td style="text-align: center; font-size: 14px; color: #059669;">${summary.total_new_billable_branches}</td>
+                  <td>—</td>
+                  <td style="text-align: center; font-size: 15px; color: var(--primary);">${summary.total_om_bill_current_month}</td>
+                  <td style="text-align: center; font-size: 14px;">${summary.total_ho_billable} Yes</td>
+                  <td style="text-align: center; font-size: 15px; font-weight: 800;">${summary.total_branch_with_ho}</td>
+                </tr>
+              </tfoot>
+            ` : ''}
+          </table>
+        </div>
+      `;
+    } catch (err) {
+      console.error('OM Bill table error:', err);
+      container.innerHTML = `<div style="padding: 24px; color: var(--danger); text-align: center;">Failed to load report data: ${err.message}</div>`;
+    }
+  },
+
+  exportOmBill(format) {
+    const { search, mfi_id, team_id, team_member_id, reporting_month, min_branches, max_branches } = ReportsView.omBillState;
+    const queryParams = new URLSearchParams({
+      format,
+      search,
+      mfi_id,
+      team_id,
+      team_member_id,
+      reporting_month,
+      min_branches,
+      max_branches
+    });
+    window.open(`/api/reports/om-bill/export?${queryParams.toString()}`, '_blank');
+  },
+
+  licenceBillState: {
+    search: '',
+    mfi_id: '',
+    team_id: '',
+    team_member_id: '',
+    reporting_month: ''
+  },
+
+  async renderLicenceBillReport(container) {
+    if (!ReportsView.licenceBillState.reporting_month) {
+      const now = new Date();
+      const yr = now.getFullYear();
+      const mo = String(now.getMonth() + 1).padStart(2, '0');
+      ReportsView.licenceBillState.reporting_month = `${yr}-${mo}`;
+    }
+
+    container.innerHTML = `
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">Licence Bill Report</h1>
+        </div>
+        <div class="page-actions">
+          <button class="btn btn-secondary" onclick="window.print()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+            <span>Print Report</span>
+          </button>
+          <button class="btn btn-primary" onclick="ReportsView.exportLicenceBill('xlsx')">Export Excel</button>
+        </div>
+      </div>
+
+      <!-- Advanced Filter Panel (Search Parameters) -->
+      <div class="card p-4" style="margin-bottom: 24px; padding: 20px;">
+        <div style="font-weight: 700; font-size: 14px; margin-bottom: 16px; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+          <span>Search & Filter Parameters</span>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+          <!-- General Search -->
+          <div class="form-group" style="margin-bottom:0;">
+            <label class="form-label" style="font-size: 12px; font-weight: 600;">General Search</label>
+            <input type="text" class="form-control" id="licencebill-search" placeholder="Search MFI name, code, member..." value="${ReportsView.licenceBillState.search}">
+          </div>
+
+          <!-- MFI Dropdown -->
+          <div class="form-group" style="margin-bottom:0;">
+            <label class="form-label" style="font-size: 12px; font-weight: 600;">MFI (All / Individual)</label>
+            <select class="form-control" id="licencebill-mfi">
+              <option value="">All MFIs</option>
+            </select>
+          </div>
+
+          <!-- Team Dropdown -->
+          <div class="form-group" style="margin-bottom:0;">
+            <label class="form-label" style="font-size: 12px; font-weight: 600;">Team (All / Individual)</label>
+            <select class="form-control" id="licencebill-team" onchange="ReportsView.onLicenceBillTeamChange()">
+              <option value="">All Teams</option>
+            </select>
+          </div>
+
+          <!-- Team Member Dropdown -->
+          <div class="form-group" style="margin-bottom:0;">
+            <label class="form-label" style="font-size: 12px; font-weight: 600;">Team Member</label>
+            <select class="form-control" id="licencebill-member">
+              <option value="">All Team Members</option>
+            </select>
+          </div>
+
+          <!-- Reporting Month -->
+          <div class="form-group" style="margin-bottom:0;">
+            <label class="form-label" style="font-size: 12px; font-weight: 600;">Reporting Month</label>
+            <input type="month" class="form-control" id="licencebill-month" value="${ReportsView.licenceBillState.reporting_month}">
+          </div>
+        </div>
+
+        <div style="margin-top: 16px; display: flex; justify-content: flex-end; gap: 12px;">
+          <button class="btn btn-secondary btn-sm" onclick="ReportsView.resetLicenceBillFilters()">Reset Parameters</button>
+          <button class="btn btn-primary btn-sm" onclick="ReportsView.applyLicenceBillFilters()">Show Report</button>
+        </div>
+      </div>
+
+      <!-- Report Table Container -->
+      <div class="card" id="licencebill-table-container">
+        <div style="text-align: center; padding: 50px;">
+          <div style="display:inline-block; width:30px; height:30px; border:3px solid #e2e8f0; border-top-color:#1a56db; border-radius:50%; animation:spin 0.8s linear infinite;"></div>
+          <div style="margin-top:10px; color:#64748b; font-size:13px;">Loading Licence bill report data...</div>
+        </div>
+      </div>
+    `;
+
+    await ReportsView.loadLicenceBillFilterOptions();
+    await ReportsView.fetchLicenceBillData();
+  },
+
+  async loadLicenceBillFilterOptions() {
+    try {
+      const mfiRes = await fetch('/api/mfis/autocomplete?limit=500');
+      if (mfiRes.ok) {
+        const { data: mfis } = await mfiRes.json();
+        const select = document.getElementById('licencebill-mfi');
+        if (select && Array.isArray(mfis)) {
+          select.innerHTML = '<option value="">All MFIs</option>' +
+            mfis.map(m => `<option value="${m.id}" ${String(m.id) === String(ReportsView.licenceBillState.mfi_id) ? 'selected' : ''}>${m.short_name} — ${m.full_name}</option>`).join('');
+        }
+      }
+
+      const teamRes = await fetch('/api/teams/all');
+      if (teamRes.ok) {
+        const { data: teams } = await teamRes.json();
+        const select = document.getElementById('licencebill-team');
+        if (select && Array.isArray(teams)) {
+          select.innerHTML = '<option value="">All Teams</option>' +
+            teams.map(t => `<option value="${t.id}" ${String(t.id) === String(ReportsView.licenceBillState.team_id) ? 'selected' : ''}>${t.team_name} (${t.team_code})</option>`).join('');
+        }
+      }
+
+      await ReportsView.onLicenceBillTeamChange(true);
+    } catch (err) {
+      console.error('Error loading Licence Bill filter options:', err);
+    }
+  },
+
+  async onLicenceBillTeamChange(isInitial = false) {
+    const teamSelect = document.getElementById('licencebill-team');
+    const memberSelect = document.getElementById('licencebill-member');
+    if (!memberSelect) return;
+
+    const teamId = teamSelect ? teamSelect.value : '';
+
+    try {
+      let endpoint = '/api/teams/members/assigned';
+      if (teamId) {
+        endpoint = `/api/team-members/by-team/${teamId}`;
+      }
+      const res = await fetch(endpoint);
+      if (res.ok) {
+        const { data: members } = await res.json();
+        if (Array.isArray(members)) {
+          memberSelect.innerHTML = '<option value="">All Team Members</option>' +
+            members.map(m => `<option value="${m.id}" ${String(m.id) === String(ReportsView.licenceBillState.team_member_id) ? 'selected' : ''}>${m.member_name} (${m.member_code})</option>`).join('');
+        }
+      }
+    } catch (err) {
+      console.error('Error loading team members:', err);
+    }
+  },
+
+  applyLicenceBillFilters() {
+    ReportsView.licenceBillState.search = document.getElementById('licencebill-search').value.trim();
+    ReportsView.licenceBillState.mfi_id = document.getElementById('licencebill-mfi').value;
+    ReportsView.licenceBillState.team_id = document.getElementById('licencebill-team').value;
+    ReportsView.licenceBillState.team_member_id = document.getElementById('licencebill-member').value;
+    ReportsView.licenceBillState.reporting_month = document.getElementById('licencebill-month').value;
+
+    ReportsView.fetchLicenceBillData();
+  },
+
+  resetLicenceBillFilters() {
+    const now = new Date();
+    const yr = now.getFullYear();
+    const mo = String(now.getMonth() + 1).padStart(2, '0');
+
+    ReportsView.licenceBillState = {
+      search: '',
+      mfi_id: '',
+      team_id: '',
+      team_member_id: '',
+      reporting_month: `${yr}-${mo}`
+    };
+
+    document.getElementById('licencebill-search').value = '';
+    document.getElementById('licencebill-mfi').value = '';
+    document.getElementById('licencebill-team').value = '';
+    document.getElementById('licencebill-member').value = '';
+    document.getElementById('licencebill-month').value = `${yr}-${mo}`;
+
+    ReportsView.onLicenceBillTeamChange();
+    ReportsView.fetchLicenceBillData();
+  },
+
+  async fetchLicenceBillData() {
+    const container = document.getElementById('licencebill-table-container');
+    if (!container) return;
+
+    const { search, mfi_id, team_id, team_member_id, reporting_month } = ReportsView.licenceBillState;
+
+    const queryParams = new URLSearchParams({
+      search,
+      mfi_id,
+      team_id,
+      team_member_id,
+      reporting_month
+    });
+
+    try {
+      const res = await fetch(`/api/reports/licence-bill?${queryParams.toString()}`, {
+        headers: { 'Accept': 'application/json' }
+      });
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.message || 'Failed to fetch Licence bill report data.');
+      }
+
+      const { data } = await res.json();
+      const { rows, summary, reporting_month: repMonth, last_month: lastMo } = data;
+
+      const repMonthObj = new Date(repMonth + '-01');
+      const repMonthTitle = repMonthObj.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+
+      const lastMonthObj = new Date(lastMo + '-01');
+      const lastMonthTitle = lastMonthObj.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+
+      container.innerHTML = `
+        <div class="table-responsive">
+          <table class="table">
+            <thead>
+              <tr style="background: #e2e8f0; color: #1e293b;">
+                <th style="width: 50px; text-align: center;">SL</th>
+                <th>MFI Short Name</th>
+                <th>Team Member Name</th>
+                <th style="text-align: center;">Total Licence Billing Branch<br><small style="font-weight: 500;">(Last Month: ${lastMonthTitle})</small></th>
+                <th style="text-align: center;">New Licence Billable Branch<br><small style="font-weight: 500;">(Reporting Month: ${repMonthTitle})</small></th>
+                <th>Name & ID of New Licence Billable Branches</th>
+                <th style="text-align: center;">Total Total Licence Billed<br><small style="font-weight: 500;">(as of Current Month)</small></th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows.length === 0 ? `<tr><td colspan="7" style="text-align: center; padding: 30px; color: var(--text-muted);">No records found matching search filters.</td></tr>` : ''}
+              ${rows.map(r => `
+                <tr>
+                  <td style="text-align: center;"><strong>${r.sl}</strong></td>
+                  <td><strong style="color: var(--primary);">${r.short_name}</strong> <span style="font-size: 11px; color: var(--text-muted); font-weight: normal;">(${r.full_name})</span></td>
+                  <td>${r.team_member_name}</td>
+                  <td style="text-align: center; font-weight: 600;">${r.last_month_licence_branches}</td>
+                  <td style="text-align: center; font-weight: 600; color: ${r.new_licence_branches > 0 ? '#059669' : 'inherit'};">${r.new_licence_branches}</td>
+                  <td><span style="font-size: 12px;">${r.new_licence_branch_names}</span></td>
+                  <td style="text-align: center; font-weight: 700; color: var(--primary); font-size: 14px;">${r.total_licence_billed}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+            ${rows.length > 0 ? `
+              <tfoot>
+                <tr style="background: #f1f5f9; font-weight: 700; border-top: 2px solid var(--border-color);">
+                  <td colspan="3" style="text-align: right; padding-right: 16px;">Total (${summary.total_mfis} MFIs):</td>
+                  <td style="text-align: center; font-size: 14px;">${summary.total_last_month_licence_branches}</td>
+                  <td style="text-align: center; font-size: 14px; color: #059669;">${summary.total_new_licence_branches}</td>
+                  <td>—</td>
+                  <td style="text-align: center; font-size: 15px; color: var(--primary); font-weight: 800;">${summary.total_licence_billed}</td>
+                </tr>
+              </tfoot>
+            ` : ''}
+          </table>
+        </div>
+      `;
+    } catch (err) {
+      console.error('Licence Bill table error:', err);
+      container.innerHTML = `<div style="padding: 24px; color: var(--danger); text-align: center;">Failed to load report data: ${err.message}</div>`;
+    }
+  },
+
+  exportLicenceBill(format) {
+    const { search, mfi_id, team_id, team_member_id, reporting_month } = ReportsView.licenceBillState;
+    const queryParams = new URLSearchParams({
+      format,
+      search,
+      mfi_id,
+      team_id,
+      team_member_id,
+      reporting_month
+    });
+    window.open(`/api/reports/licence-bill/export?${queryParams.toString()}`, '_blank');
   }
 };
 

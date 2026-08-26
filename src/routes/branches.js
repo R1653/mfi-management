@@ -147,7 +147,8 @@ router.get('/export', requireAuth, requirePermission('report.export'), async (re
       .select(
         'branches.*',
         'mfi.short_name as mfi_short_name',
-        'mfi.full_name as mfi_full_name'
+        'mfi.full_name as mfi_full_name',
+        'mfi.om_grace_period_months as om_grace_period_months'
       )
       .orderBy('branches.mfi_id', 'asc')
       .orderBy('branches.branch_code', 'asc');
@@ -176,7 +177,19 @@ router.get('/export', requireAuth, requirePermission('report.export'), async (re
 
     const branches = await query;
 
-    const data = branches.map((b, idx) => ({
+    const today = dayjs().startOf('day');
+    let filteredBranches = branches;
+    if (pending_billable === '1') {
+      filteredBranches = branches.filter(b => {
+        if (b.branch_type !== 'Branch Office') return false;
+        const gracePeriod = b.om_grace_period_months;
+        if (gracePeriod === null || gracePeriod === undefined) return false;
+        const firstBillDate = dayjs(b.software_start_date).add(gracePeriod, 'month');
+        return firstBillDate.isAfter(today);
+      });
+    }
+
+    const data = filteredBranches.map((b, idx) => ({
       sl: idx + 1,
       mfi: `${b.mfi_short_name} - ${b.mfi_full_name}`,
       branch_name: b.branch_name,
@@ -184,8 +197,7 @@ router.get('/export', requireAuth, requirePermission('report.export'), async (re
       branch_opening_date: dayjs(b.branch_opening_date).format('YYYY-MM-DD'),
       software_start_date: dayjs(b.software_start_date).format('YYYY-MM-DD'),
       billable_month: b.billable_month,
-      branch_type: b.branch_type,
-      status: b.status.toUpperCase()
+      branch_type: b.branch_type
     }));
 
     await AuditService.log({
@@ -203,8 +215,7 @@ router.get('/export', requireAuth, requirePermission('report.export'), async (re
       { header: 'Opening Date', key: 'branch_opening_date', width: 15 },
       { header: 'Software Start', key: 'software_start_date', width: 15 },
       { header: 'Billable Month', key: 'billable_month', width: 16 },
-      { header: 'Branch Type', key: 'branch_type', width: 16 },
-      { header: 'Status', key: 'status', width: 12 }
+      { header: 'Branch Type', key: 'branch_type', width: 16 }
     ];
 
     if (format === 'csv') {
@@ -219,14 +230,13 @@ router.get('/export', requireAuth, requirePermission('report.export'), async (re
         r.branch_opening_date,
         r.software_start_date,
         r.billable_month,
-        r.branch_type,
-        r.status
+        r.branch_type
       ]);
-      return await ExportService.toPDF(res, 'branches_directory_report', 'MFI Branches Master Directory', headers, rows);
+      return await ExportService.toPDF(res, 'branches_directory_report', 'BRANCH REPORT', headers, rows);
     } else {
       const buffer = await ExportService.toExcel({
         sheetName: 'Branches',
-        title: 'MFI Branches Master Directory Report',
+        title: 'BRANCH REPORT',
         columns,
         data
       });

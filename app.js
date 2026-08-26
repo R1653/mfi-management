@@ -95,7 +95,7 @@ app.get(['/users', '/roles', '/audit-logs', '/migration'], requireAuth, (req, re
 });
 
 // Reports pages
-app.get(['/reports/mfi', '/reports/branch', '/reports/agreement-history', '/reports/renewal-due'], requireAuth, (req, res) => {
+app.get(['/reports/mfi', '/reports/branch', '/reports/agreement-history', '/reports/renewal-due', '/reports/om-bill', '/reports/licence-bill'], requireAuth, (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
