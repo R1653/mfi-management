@@ -19,10 +19,13 @@ const reportRoutes = require('./src/routes/reports');
 const migrationRoutes = require('./src/routes/migration');
 const { requireAuth, requireGuest } = require('./src/middleware/auth');
 
+const compression = require('compression');
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Security & Parsing Middleware
+// Compression & Security Middleware
+app.use(compression());
 app.set('trust proxy', 1);
 app.use(cors());
 app.use(morgan('dev'));
@@ -44,8 +47,11 @@ app.use(
   })
 );
 
-// Serve static assets
-app.use(express.static(path.join(__dirname, 'public')));
+// Serve static assets with caching enabled for high performance
+app.use(express.static(path.join(__dirname, 'public'), {
+  maxAge: '1d',
+  etag: true
+}));
 
 // HTML Page Routes
 // Auth pages

@@ -67,24 +67,33 @@ async function generateMfiReportData(queryParams) {
   }
 
   const mfis = await query.orderBy('mfi.short_name', 'asc').select('mfi.*');
+  const mfiIds = mfis.map(m => m.id);
 
-  const reportData = await Promise.all(mfis.map(async (mfi, idx) => {
-    const applicable = await AgreementService.getApplicableAgreement(mfi.id, today);
-    const branchStats = await db('branches')
-      .where('mfi_id', mfi.id)
-      .whereNull('deleted_at')
-      .select(
-        db.raw('COUNT(*) as total'),
-        db.raw("SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active"),
-        db.raw("SUM(CASE WHEN branch_type = 'Branch Office' THEN 1 ELSE 0 END) as branch_offices"),
-        db.raw("SUM(CASE WHEN branch_type = 'Area Office' THEN 1 ELSE 0 END) as area_offices"),
-        db.raw("SUM(CASE WHEN branch_type = 'Zone Office' THEN 1 ELSE 0 END) as zone_offices")
-      )
-      .first();
+  // Batch query 1: Batch fetch all applicable agreements
+  const applicableMap = await AgreementService.getApplicableAgreementsForMfis(mfiIds, today);
+
+  // Batch query 2: Batch fetch branch stats grouped by mfi_id
+  const statsRows = mfiIds.length > 0 ? await db('branches')
+    .whereIn('mfi_id', mfiIds)
+    .whereNull('deleted_at')
+    .groupBy('mfi_id')
+    .select(
+      'mfi_id',
+      db.raw('COUNT(*) as total'),
+      db.raw("SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active"),
+      db.raw("SUM(CASE WHEN branch_type = 'Branch Office' THEN 1 ELSE 0 END) as branch_offices"),
+      db.raw("SUM(CASE WHEN branch_type = 'Area Office' THEN 1 ELSE 0 END) as area_offices"),
+      db.raw("SUM(CASE WHEN branch_type = 'Zone Office' THEN 1 ELSE 0 END) as zone_offices")
+    ) : [];
+  const statsMap = new Map(statsRows.map(r => [r.mfi_id, r]));
+
+  const reportData = mfis.map((mfi, idx) => {
+    const applicable = applicableMap.get(mfi.id);
+    const branchStats = statsMap.get(mfi.id);
 
     const activeBranches = parseInt(branchStats?.active || 0, 10);
-    const licenseFee = applicable ? applicable.license_fee_per_branch : parseFloat(mfi.initial_license_fee);
-    const omFee = applicable ? applicable.om_fee_per_branch : parseFloat(mfi.initial_om_fee);
+    const licenseFee = applicable ? applicable.license_fee_per_branch : parseFloat(mfi.initial_license_fee || 0);
+    const omFee = applicable ? applicable.om_fee_per_branch : parseFloat(mfi.initial_om_fee || 0);
 
     // Estimated Monthly Total Fee
     const monthlyTotal = (licenseFee + omFee) * activeBranches;
@@ -106,7 +115,9 @@ async function generateMfiReportData(queryParams) {
       monthly_projected_total: monthlyTotal,
       status: mfi.status
     };
-  }));
+  });
+
+  return reportData;
 
   return reportData;
 }
@@ -247,14 +258,23 @@ async function generateOmBillReportData(queryParams) {
   }
 
   const mfis = await query.orderBy('mfi.short_name', 'asc');
+  const mfiIds = mfis.map(m => m.id);
 
-  let reportRows = await Promise.all(mfis.map(async (mfi) => {
-    // Only Branch Office type branches are considered for this report (excludes Area & Zone Office)
-    const branches = await db('branches')
-      .where('mfi_id', mfi.id)
-      .where('branch_type', 'Branch Office')
-      .whereNull('deleted_at')
-      .select('branch_name', 'branch_code', 'billable_month');
+  // Batch query: Fetch all branch offices for matching MFIs in ONE single query
+  const allBranches = mfiIds.length > 0 ? await db('branches')
+    .whereIn('mfi_id', mfiIds)
+    .where('branch_type', 'Branch Office')
+    .whereNull('deleted_at')
+    .select('mfi_id', 'branch_name', 'branch_code', 'billable_month') : [];
+
+  const branchGroupMap = new Map();
+  allBranches.forEach(b => {
+    if (!branchGroupMap.has(b.mfi_id)) branchGroupMap.set(b.mfi_id, []);
+    branchGroupMap.get(b.mfi_id).push(b);
+  });
+
+  let reportRows = mfis.map((mfi) => {
+    const branches = branchGroupMap.get(mfi.id) || [];
 
     let lastMonthCount = 0;
     let newBillableCount = 0;
@@ -287,7 +307,7 @@ async function generateOmBillReportData(queryParams) {
       head_office_billable: headOfficeBillableStr,
       total_branch_with_ho: totalBranchWithHo
     };
-  }));
+  });
 
   // Apply branch range filters (min_branches / max_branches against total_branch_with_ho)
   if (min_branches !== undefined && min_branches !== null && min_branches !== '') {
@@ -466,14 +486,23 @@ async function generateLicenceBillReportData(queryParams) {
   }
 
   const mfis = await query.orderBy('mfi.short_name', 'asc');
+  const mfiIds = mfis.map(m => m.id);
 
-  let reportRows = await Promise.all(mfis.map(async (mfi) => {
-    // Rule: For Licence Bill Report, ONLY 'Branch Office' type branches are considered (excludes Area or Zone Office)
-    const branches = await db('branches')
-      .where('mfi_id', mfi.id)
-      .where('branch_type', 'Branch Office')
-      .whereNull('deleted_at')
-      .select('branch_name', 'branch_code', 'branch_opening_date', 'created_at');
+  // Batch query: Fetch all branch offices for matching MFIs in ONE single query
+  const allBranches = mfiIds.length > 0 ? await db('branches')
+    .whereIn('mfi_id', mfiIds)
+    .where('branch_type', 'Branch Office')
+    .whereNull('deleted_at')
+    .select('mfi_id', 'branch_name', 'branch_code', 'branch_opening_date', 'created_at') : [];
+
+  const branchGroupMap = new Map();
+  allBranches.forEach(b => {
+    if (!branchGroupMap.has(b.mfi_id)) branchGroupMap.set(b.mfi_id, []);
+    branchGroupMap.get(b.mfi_id).push(b);
+  });
+
+  let reportRows = mfis.map((mfi) => {
+    const branches = branchGroupMap.get(mfi.id) || [];
 
     let lastMonthCount = 0;
     let newLicenceCount = 0;
@@ -506,7 +535,7 @@ async function generateLicenceBillReportData(queryParams) {
       new_licence_branch_names: newLicenceNames.length > 0 ? newLicenceNames.join(', ') : '—',
       total_licence_billed: totalLicenceBilled
     };
-  }));
+  });
 
   const rowsWithSl = reportRows.map((row, idx) => ({
     sl: idx + 1,
